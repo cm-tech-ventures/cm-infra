@@ -85,12 +85,43 @@ resource "google_project_iam_member" "deployer_roles" {
     "roles/run.admin",
     "roles/artifactregistry.writer",
     "roles/cloudscheduler.admin",
-    "roles/iam.serviceAccountAdmin",
-    "roles/secretmanager.viewer",
   ])
   project = var.project_id
   role    = each.value
   member  = "serviceAccount:${google_service_account.deployer.email}"
+}
+
+# secretmanager.viewer não é suficiente: o módulo cloud-run-service cria bindings IAM
+# (google_secret_manager_secret_iam_member), o que exige setIamPolicy — só secretmanager.admin
+# concede isso. Escopado por condição a secrets "cm-*" para não abrir admin sobre segredos
+# de outros sistemas do projeto.
+resource "google_project_iam_member" "deployer_secretmanager_admin" {
+  project = var.project_id
+  role    = "roles/secretmanager.admin"
+  member  = "serviceAccount:${google_service_account.deployer.email}"
+
+  condition {
+    title       = "cm-secrets-only"
+    description = "Admin restrito a secrets com prefixo cm- (segredos dos cores)."
+    expression  = "resource.name.startsWith(\"projects/${var.project_id}/secrets/cm-\")"
+  }
+}
+
+# iam.serviceAccountAdmin em nível de projeto permitiria ao deployer editar IAM de
+# QUALQUER SA (caminho de escalação de privilégio). O módulo cloud-run-service só
+# precisa criar/gerenciar as SAs de runtime dos cores, que seguem o padrão de nome
+# "<service_name>-run" (ver modules/cloud-run-service/main.tf, local.sa_account_id).
+# Escopamos via condição ao padrão de nome em vez de conceder admin projeto-wide.
+resource "google_project_iam_member" "deployer_serviceaccount_admin_scoped" {
+  project = var.project_id
+  role    = "roles/iam.serviceAccountAdmin"
+  member  = "serviceAccount:${google_service_account.deployer.email}"
+
+  condition {
+    title       = "core-runtime-sas-only"
+    description = "Admin restrito a SAs de runtime dos cores (sufixo -run)."
+    expression  = "resource.name.endsWith(\"-run@${var.project_id}.iam.gserviceaccount.com\")"
+  }
 }
 
 resource "google_storage_bucket_iam_member" "deployer_state" {
