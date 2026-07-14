@@ -1,0 +1,70 @@
+# Reusable: terraform apply do core (main.tf fino instanciando módulos do cm-infra).
+# State por serviço em bucket GCS: prefix = <service>/<environment>.
+name: deploy-cloud-run
+
+on:
+  workflow_call:
+    inputs:
+      service:
+        description: Nome do serviço/core (ex, cm-identity)
+        type: string
+        required: true
+      image-uri:
+        description: URI da imagem com digest (saída do build-and-push)
+        type: string
+        required: true
+      environment:
+        type: string
+        default: "prod"
+      terraform-dir:
+        description: Diretório com o main.tf do core
+        type: string
+        default: "infra"
+      terraform-version:
+        type: string
+        default: "1.9.8"
+      state-bucket:
+        description: Bucket GCS do state do Terraform
+        type: string
+        required: true
+      workload-identity-provider:
+        type: string
+        required: true
+      deploy-service-account:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.terraform-dir }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ inputs.workload-identity-provider }}
+          service_account: ${{ inputs.deploy-service-account }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ inputs.terraform-version }}
+
+      - name: Terraform init (backend GCS, state por serviço/ambiente)
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${{ inputs.state-bucket }}" \
+            -backend-config="prefix=${{ inputs.service }}/${{ inputs.environment }}"
+
+      - name: Terraform apply
+        run: |
+          terraform apply -input=false -auto-approve \
+            -var="image=${{ inputs.image-uri }}" \
+            -var="environment=${{ inputs.environment }}"

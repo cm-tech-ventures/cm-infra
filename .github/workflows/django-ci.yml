@@ -1,0 +1,59 @@
+# Reusable: lint (ruff) + testes (pytest) + contrato OpenAPI (drf-spectacular).
+# Uso no core (~10 linhas):
+#   jobs:
+#     ci:
+#       uses: cm-ventures/cm-infra/.github/workflows/django-ci.yml@main
+name: django-ci
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        type: string
+        default: "3.12"
+      working-directory:
+        type: string
+        default: "."
+      schema-path:
+        description: Caminho do schema OpenAPI commitado para diff de contrato
+        type: string
+        default: "schema.yml"
+      django-settings-module:
+        type: string
+        default: "config.settings"
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    env:
+      DJANGO_SETTINGS_MODULE: ${{ inputs.django-settings-module }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
+          pip install -r requirements.txt
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Tests (pytest)
+        run: pytest
+
+      - name: OpenAPI contract check (spectacular)
+        run: |
+          python manage.py spectacular --file /tmp/schema-generated.yml --validate
+          if ! diff -u "${{ inputs.schema-path }}" /tmp/schema-generated.yml; then
+            echo "::error::Schema OpenAPI divergente do commitado. Rode 'python manage.py spectacular --file ${{ inputs.schema-path }}' e commite."
+            exit 1
+          fi
