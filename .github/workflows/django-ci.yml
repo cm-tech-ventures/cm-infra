@@ -21,6 +21,10 @@ on:
       django-settings-module:
         type: string
         default: "config.settings"
+      service-name:
+        description: Identidade do core (SERVICE_NAME/DB_SCHEMA); necessário para o schema OpenAPI gerado em CI bater com o commitado
+        type: string
+        default: "service"
 
 jobs:
   ci:
@@ -30,6 +34,8 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
     env:
       DJANGO_SETTINGS_MODULE: ${{ inputs.django-settings-module }}
+      SERVICE_NAME: ${{ inputs.service-name }}
+      DB_SCHEMA: ${{ inputs.service-name }}
     steps:
       - uses: actions/checkout@v4
 
