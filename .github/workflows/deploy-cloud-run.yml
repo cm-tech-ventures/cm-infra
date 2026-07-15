@@ -73,8 +73,11 @@ jobs:
       # Por isso usamos um PAT dedicado (secrets.INFRA_MODULES_TOKEN), só com
       # leitura de conteúdo, passado explicitamente pelo repo chamador.
       - name: Configure git para módulos privados do Terraform
+        env:
+          INFRA_MODULES_TOKEN: ${{ secrets.INFRA_MODULES_TOKEN }}
         run: |
-          git config --global url."https://x-access-token:${{ secrets.INFRA_MODULES_TOKEN }}@github.com/".insteadOf "https://github.com/"
+          token="$(printf '%s' "$INFRA_MODULES_TOKEN" | tr -d '[:space:]')"
+          git config --global url."https://x-access-token:${token}@github.com/".insteadOf "https://github.com/"
 
       - name: Terraform init (backend GCS, state por serviço/ambiente)
         run: |
