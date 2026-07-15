@@ -75,8 +75,9 @@ jobs:
 
       - name: Start ssh-agent (para RUN --mount=type=ssh no build)
         run: |
-          eval "$(ssh-agent -s)" >> "$GITHUB_ENV"
+          eval "$(ssh-agent -s)"
           echo "SSH_AUTH_SOCK=${SSH_AUTH_SOCK}" >> "$GITHUB_ENV"
+          echo "SSH_AGENT_PID=${SSH_AGENT_PID}" >> "$GITHUB_ENV"
 
       - name: Carregar deploy key do cm-sdk no agent (se fornecida)
         if: ${{ secrets.cm-sdk-deploy-key != '' }}
