@@ -34,7 +34,7 @@ on:
         type: string
         required: true
     secrets:
-      cm-sdk-deploy-key:
+      CM_SDK_DEPLOY_KEY:
         description: >
           Chave privada SSH (ed25519) da deploy key somente-leitura cadastrada em
           cm-tech-ventures/cm-sdk. Opcional: só necessário quando requirements.txt
@@ -80,10 +80,10 @@ jobs:
           echo "SSH_AGENT_PID=${SSH_AGENT_PID}" >> "$GITHUB_ENV"
 
       - name: Carregar deploy key do cm-sdk no agent (se fornecida)
-        if: ${{ secrets.cm-sdk-deploy-key != '' }}
+        if: ${{ secrets.CM_SDK_DEPLOY_KEY != '' }}
         run: |
           KEY_FILE="$(mktemp)"
-          printf '%s\n' "${{ secrets.cm-sdk-deploy-key }}" > "$KEY_FILE"
+          printf '%s\n' "${{ secrets.CM_SDK_DEPLOY_KEY }}" > "$KEY_FILE"
           chmod 600 "$KEY_FILE"
           ssh-add "$KEY_FILE"
           rm -f "$KEY_FILE"
