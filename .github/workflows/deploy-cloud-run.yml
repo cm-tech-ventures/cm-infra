@@ -33,6 +33,10 @@ on:
       deploy-service-account:
         type: string
         required: true
+      identity-introspection-url:
+        description: URL do endpoint de introspeção do cm-identity (obrigatório para cores que usam autenticação)
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -57,6 +61,12 @@ jobs:
         with:
           terraform_version: ${{ inputs.terraform-version }}
 
+      # Módulos Terraform referenciam cm-infra via git HTTPS (repo privado).
+      # Redireciona para URL autenticada com o token do Actions antes do init.
+      - name: Configure git para módulos privados do Terraform
+        run: |
+          git config --global url."https://x-access-token:${{ github.token }}@github.com/".insteadOf "https://github.com/"
+
       - name: Terraform init (backend GCS, state por serviço/ambiente)
         run: |
           terraform init -input=false \
@@ -67,4 +77,6 @@ jobs:
         run: |
           terraform apply -input=false -auto-approve \
             -var="image=${{ inputs.image-uri }}" \
-            -var="environment=${{ inputs.environment }}"
+            -var="environment=${{ inputs.environment }}" \
+            -var="service_name=${{ inputs.service }}" \
+            -var="identity_introspection_url=${{ inputs.identity-introspection-url }}"
