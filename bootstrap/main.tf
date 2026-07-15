@@ -24,6 +24,16 @@ resource "google_project_service" "apis" {
   disable_on_destroy = false
 }
 
+# Condições de IAM em recursos do Secret Manager avaliam resource.name usando o
+# NÚMERO do projeto (ex.: "projects/857737530765/secrets/foo"), não o project_id
+# textual — apesar da mensagem de erro do Terraform ecoar o project_id. Usar o
+# project_id na condição faz o startsWith() nunca casar e o apply falha com 403
+# em getIamPolicy/setIamPolicy (CMV-28). Resolvemos o número via data source em
+# vez de hardcode para não quebrar se o projeto for recriado.
+data "google_project" "current" {
+  project_id = var.project_id
+}
+
 # --- State bucket (versionado; lock nativo do backend GCS) ---
 resource "google_storage_bucket" "tf_state" {
   project                     = var.project_id
@@ -110,25 +120,39 @@ resource "google_project_iam_member" "deployer_secretmanager_admin" {
   condition {
     title       = "core-secrets-only"
     description = "Admin restrito aos secrets padrão dos cores (sufixo -database-url / -django-secret-key)."
-    expression  = "resource.name.startsWith(\"projects/${var.project_id}/secrets/\") && (resource.name.endsWith(\"-database-url\") || resource.name.endsWith(\"-django-secret-key\"))"
+    expression  = "resource.name.startsWith(\"projects/${data.google_project.current.number}/secrets/\") && (resource.name.endsWith(\"-database-url\") || resource.name.endsWith(\"-django-secret-key\"))"
   }
 }
 
-# iam.serviceAccountAdmin em nível de projeto permitiria ao deployer editar IAM de
-# QUALQUER SA (caminho de escalação de privilégio). O módulo cloud-run-service só
-# precisa criar/gerenciar as SAs de runtime dos cores, que seguem o padrão de nome
-# "<service_name>-run" (ver modules/cloud-run-service/main.tf, local.sa_account_id).
-# Escopamos via condição ao padrão de nome em vez de conceder admin projeto-wide.
-resource "google_project_iam_member" "deployer_serviceaccount_admin_scoped" {
-  project = var.project_id
-  role    = "roles/iam.serviceAccountAdmin"
-  member  = "serviceAccount:${google_service_account.deployer.email}"
+# Tentativa anterior escopava iam.serviceAccountAdmin por condição no sufixo de nome
+# da SA (endsWith "-run@..."). Isso nunca funciona: o motor de condições do IAM avalia
+# resource.name de Service Account usando o unique_id NUMÉRICO
+# ("//iam.googleapis.com/projects/-/serviceAccounts/<unique_id>"), não o email/account_id
+# — confirmado pelo erro 403 em getIamPolicy mesmo com o nome batendo no padrão (CMV-28).
+# Não há atributo de condição alternativo para escopar por nome uma SA que ainda não
+# existe no momento do apply.
+#
+# Em vez de roles/iam.serviceAccountAdmin (que também inclui disable/delete/update-key,
+# ampliando a superfície de escalação), usamos uma role customizada restrita só às duas
+# permissões que o módulo cloud-run-service realmente precisa: ler e escrever a política
+# IAM da SA de runtime que ele acabou de criar, para conceder actAs ao deployer
+# (google_service_account_iam_member.deployer_act_as). Ainda é um grant projeto-wide (sem
+# condição possível), mas a superfície é bem menor que serviceAccountAdmin completo.
+resource "google_project_iam_custom_role" "deployer_sa_iam_policy_admin" {
+  project     = var.project_id
+  role_id     = "deployerServiceAccountIamPolicyAdmin"
+  title       = "Deployer — leitura/escrita de política IAM de Service Accounts"
+  description = "Permite ao deployer conceder roles/iam.serviceAccountUser sobre as SAs de runtime que ele cria (deploy Cloud Run). Não inclui create/delete/update de SAs."
+  permissions = [
+    "iam.serviceAccounts.getIamPolicy",
+    "iam.serviceAccounts.setIamPolicy",
+  ]
+}
 
-  condition {
-    title       = "core-runtime-sas-only"
-    description = "Admin restrito a SAs de runtime dos cores (sufixo -run)."
-    expression  = "resource.name.endsWith(\"-run@${var.project_id}.iam.gserviceaccount.com\")"
-  }
+resource "google_project_iam_member" "deployer_serviceaccount_iam_policy_admin" {
+  project = var.project_id
+  role    = google_project_iam_custom_role.deployer_sa_iam_policy_admin.id
+  member  = "serviceAccount:${google_service_account.deployer.email}"
 }
 
 # Condições baseadas em resource.name nunca são satisfeitas em chamadas CREATE (o
