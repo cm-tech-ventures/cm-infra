@@ -112,6 +112,12 @@ resource "google_project_iam_member" "deployer_roles" {
 # cores) para não abrir admin sobre segredos de outros sistemas do projeto. O prefixo "cm-"
 # usado antes nunca correspondia a nenhum secret real (CMV-28) — se um core novo precisar
 # de outro tipo de segredo, estenda este regex.
+#
+# Extensão CMV-61: cm-crm passou a usar <service>-twilio-auth-token (CMV-58) e o secret
+# compartilhado identity-introspection-core-key (CMV-59, sem prefixo de service_name — é
+# a mesma chave usada por todo core que introspecciona via cm-identity), e o `terraform
+# apply` do deploy passou a falhar com 403 em getIamPolicy nesses dois porque a condição
+# não cobria os sufixos novos.
 resource "google_project_iam_member" "deployer_secretmanager_admin" {
   project = var.project_id
   role    = "roles/secretmanager.admin"
@@ -119,8 +125,8 @@ resource "google_project_iam_member" "deployer_secretmanager_admin" {
 
   condition {
     title       = "core-secrets-only"
-    description = "Admin restrito aos secrets padrão dos cores (sufixo -database-url / -django-secret-key)."
-    expression  = "resource.name.startsWith(\"projects/${data.google_project.current.number}/secrets/\") && (resource.name.endsWith(\"-database-url\") || resource.name.endsWith(\"-django-secret-key\"))"
+    description = "Admin restrito aos secrets padrão dos cores (database-url, django-secret-key, twilio-auth-token, identity-introspection-core-key)."
+    expression  = "resource.name.startsWith(\"projects/${data.google_project.current.number}/secrets/\") && (resource.name.endsWith(\"-database-url\") || resource.name.endsWith(\"-django-secret-key\") || resource.name.endsWith(\"-twilio-auth-token\") || resource.name.endsWith(\"/identity-introspection-core-key\"))"
   }
 }
 
