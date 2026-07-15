@@ -1,0 +1,5 @@
+project_id          = "cm-ventures-core"
+region              = "southamerica-east1"
+environment         = "prod"
+image               = "southamerica-east1-docker.pkg.dev/cm-ventures-core/cm-cores/keepalive-check:v1"
+notification_email  = "cm.tech.ventures@gmail.com"

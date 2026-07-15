@@ -19,9 +19,21 @@ resource "google_cloud_scheduler_job" "job" {
     body        = var.body != "" ? base64encode(var.body) : null
     headers     = var.body != "" ? { "Content-Type" = "application/json" } : null
 
-    oidc_token {
-      service_account_email = var.oidc_service_account
-      audience              = var.oidc_audience != "" ? var.oidc_audience : var.target_uri
+    dynamic "oidc_token" {
+      for_each = var.auth_mode == "oidc" ? [1] : []
+      content {
+        service_account_email = var.oidc_service_account
+        audience              = var.oidc_audience != "" ? var.oidc_audience : var.target_uri
+      }
+    }
+
+    # Run Admin API (ex: disparar execução de Cloud Run Job) exige OAuth, não OIDC.
+    dynamic "oauth_token" {
+      for_each = var.auth_mode == "oauth" ? [1] : []
+      content {
+        service_account_email = var.oidc_service_account
+        scope                 = var.oauth_scope
+      }
     }
   }
 }

@@ -40,6 +40,23 @@ variable "oidc_audience" {
   default     = ""
 }
 
+variable "auth_mode" {
+  description = "Modo de autenticação da chamada: 'oidc' (endpoint HTTP de serviço Cloud Run) ou 'oauth' (Run Admin API, ex: disparar execução de Cloud Run Job)."
+  type        = string
+  default     = "oidc"
+
+  validation {
+    condition     = contains(["oidc", "oauth"], var.auth_mode)
+    error_message = "auth_mode deve ser 'oidc' ou 'oauth'."
+  }
+}
+
+variable "oauth_scope" {
+  description = "Scope OAuth usado quando auth_mode = 'oauth'."
+  type        = string
+  default     = "https://www.googleapis.com/auth/cloud-platform"
+}
+
 variable "http_method" {
   description = "Método HTTP da chamada."
   type        = string
