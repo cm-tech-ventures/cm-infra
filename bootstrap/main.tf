@@ -128,6 +128,17 @@ resource "google_project_iam_member" "deployer_serviceaccount_admin_scoped" {
   }
 }
 
+# Condições baseadas em resource.name nunca são satisfeitas em chamadas CREATE (o
+# recurso ainda não existe para o avaliador comparar) — por isso o binding acima,
+# sozinho, nunca permite ao deployer criar a SA de runtime de um core novo (CMV-28).
+# serviceAccountCreator só concede create/get/list, sem delete/update/setIamPolicy,
+# então não reabre o caminho de escalação de privilégio que a condição acima evita.
+resource "google_project_iam_member" "deployer_serviceaccount_creator" {
+  project = var.project_id
+  role    = "roles/iam.serviceAccountCreator"
+  member  = "serviceAccount:${google_service_account.deployer.email}"
+}
+
 resource "google_storage_bucket_iam_member" "deployer_state" {
   bucket = google_storage_bucket.tf_state.name
   role   = "roles/storage.objectAdmin"
