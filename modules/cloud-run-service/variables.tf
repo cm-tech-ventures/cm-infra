@@ -90,6 +90,16 @@ variable "allow_unauthenticated" {
   default     = false
 }
 
+variable "release_command" {
+  description = <<-EOT
+    Comando do Cloud Run Job de release (schema + migrate), executado pelo
+    deploy-cloud-run.yml antes de servir tráfego na nova revisão. Default
+    assume o management command `release` do cm-service-template (CMV-39).
+  EOT
+  type        = list(string)
+  default     = ["python", "manage.py", "release"]
+}
+
 variable "deployer_service_account" {
   description = "Email da SA de deploy (WIF) que pode atuar como a SA do serviço. Vazio = não concede."
   type        = string

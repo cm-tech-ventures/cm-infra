@@ -92,3 +92,28 @@ jobs:
             -var="environment=${{ inputs.environment }}" \
             -var="service_name=${{ inputs.service }}" \
             -var="identity_introspection_url=${{ inputs.identity-introspection-url }}"
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      # Cria o schema Postgres do serviço (se necessário) e roda as migrations
+      # via Cloud Run Job dedicado (não no processo web) — CMV-39. Idempotente:
+      # seguro rodar em todo deploy. Roda logo após o `terraform apply` acima
+      # ter publicado a nova revisão do Job com a imagem nova.
+      #
+      # Best-effort quanto ao output `release_job_name`: cores que ainda não
+      # atualizaram seu infra/main.tf a partir do cm-service-template (ex.:
+      # cm-identity, cm-crm — ver CMV-39) não têm esse output. Nesse caso
+      # avisamos e seguimos sem quebrar o deploy, em vez de falhar duro.
+      - name: Executar release job (schema + migrate)
+        run: |
+          job_name="$(terraform output -raw release_job_name 2>/dev/null || true)"
+          if [ -z "$job_name" ]; then
+            echo "::warning::Output 'release_job_name' não encontrado no infra/main.tf deste core — pulando release job (schema/migrate automático). Atualize infra/main.tf a partir do cm-service-template (CMV-39)."
+            exit 0
+          fi
+          project_id="$(terraform output -raw project_id)"
+          region="$(terraform output -raw region)"
+          gcloud run jobs execute "${job_name}" \
+            --project "${project_id}" \
+            --region "${region}" \
+            --wait

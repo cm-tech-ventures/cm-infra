@@ -89,6 +89,56 @@ resource "google_cloud_run_v2_service" "service" {
   depends_on = [google_secret_manager_secret_iam_member.reader]
 }
 
+# Cloud Run Job executado pelo deploy (deploy-cloud-run.yml) antes de servir
+# tráfego na nova revisão: cria o schema Postgres do serviço (se necessário)
+# e roda as migrations. Mesma imagem do serviço web, comando sobrescrito.
+# Idempotente por construção (CREATE SCHEMA IF NOT EXISTS + migrate) — CMV-39.
+resource "google_cloud_run_v2_job" "release" {
+  project  = var.project_id
+  name     = "${var.service_name}-release"
+  location = var.region
+
+  template {
+    template {
+      service_account = google_service_account.service.email
+      max_retries     = 1
+
+      containers {
+        image   = var.image
+        command = var.release_command
+
+        dynamic "env" {
+          for_each = var.env
+          content {
+            name  = env.key
+            value = env.value
+          }
+        }
+
+        dynamic "env" {
+          for_each = var.secrets
+          content {
+            name = env.key
+            value_source {
+              secret_key_ref {
+                secret  = env.value.secret
+                version = env.value.version
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  labels = {
+    environment = var.environment
+    managed-by  = "cm-infra"
+  }
+
+  depends_on = [google_secret_manager_secret_iam_member.reader]
+}
+
 resource "google_cloud_run_v2_service_iam_member" "public" {
   count    = var.allow_unauthenticated ? 1 : 0
   project  = var.project_id
