@@ -80,10 +80,14 @@ jobs:
           echo "SSH_AGENT_PID=${SSH_AGENT_PID}" >> "$GITHUB_ENV"
 
       - name: Carregar deploy key do cm-sdk no agent (se fornecida)
-        if: ${{ secrets.CM_SDK_DEPLOY_KEY != '' }}
+        env:
+          CM_SDK_DEPLOY_KEY: ${{ secrets.CM_SDK_DEPLOY_KEY }}
         run: |
+          if [ -z "$CM_SDK_DEPLOY_KEY" ]; then
+            exit 0
+          fi
           KEY_FILE="$(mktemp)"
-          printf '%s\n' "${{ secrets.CM_SDK_DEPLOY_KEY }}" > "$KEY_FILE"
+          printf '%s\n' "$CM_SDK_DEPLOY_KEY" > "$KEY_FILE"
           chmod 600 "$KEY_FILE"
           ssh-add "$KEY_FILE"
           rm -f "$KEY_FILE"
