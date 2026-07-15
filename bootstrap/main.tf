@@ -57,8 +57,12 @@ resource "google_iam_workload_identity_pool_provider" "github" {
     "attribute.repository_owner" = "assertion.repository_owner"
   }
 
-  # Trust restrito: owner correto E repo na allowlist.
-  attribute_condition = "assertion.repository_owner == \"${var.github_owner}\" && assertion.repository in ${jsonencode(var.github_repositories)}"
+  # Trust por owner da org (não por lista manual de repos): repos novos da org
+  # cm-tech-ventures não precisam de mudança neste provider para autenticar.
+  # A autorização granular por repo continua no binding de IAM da SA abaixo
+  # (google_service_account_iam_member.wif_binding), que segue restrito à
+  # allowlist var.github_repositories.
+  attribute_condition = "assertion.repository_owner == \"${var.github_owner}\""
 
   oidc {
     issuer_uri = "https://token.actions.githubusercontent.com"
