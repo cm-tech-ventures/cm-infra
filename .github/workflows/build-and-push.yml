@@ -33,6 +33,15 @@ on:
         description: Email da SA de deploy federada
         type: string
         required: true
+    secrets:
+      cm-sdk-read-token:
+        description: >
+          Token de leitura (fine-grained PAT ou GitHub App installation token) com
+          acesso ao repo privado cm-tech-ventures/cm-sdk. Opcional: só necessário
+          quando requirements.txt do core depende de cm-sdk via git URL. Injetado
+          no build via BuildKit secret (nunca fica em layer da imagem); o
+          Dockerfile deve montá-lo com `--mount=type=secret,id=cm_sdk_read_token`.
+        required: false
     outputs:
       image-uri:
         description: URI da imagem com digest
@@ -61,12 +70,20 @@ jobs:
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ inputs.gcp-region }}-docker.pkg.dev --quiet
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build and push
         id: push
+        env:
+          CM_SDK_READ_TOKEN: ${{ secrets.cm-sdk-read-token }}
         run: |
           REPO="${{ inputs.gcp-region }}-docker.pkg.dev/${{ inputs.gcp-project-id }}/${{ inputs.artifact-repository }}/${{ inputs.image-name }}"
           TAG="${REPO}:${GITHUB_SHA}"
-          docker build -f "${{ inputs.dockerfile }}" -t "$TAG" "${{ inputs.context }}"
+          docker buildx build \
+            --secret id=cm_sdk_read_token,env=CM_SDK_READ_TOKEN \
+            --load \
+            -f "${{ inputs.dockerfile }}" -t "$TAG" "${{ inputs.context }}"
           docker push "$TAG"
           DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$TAG")
           echo "image-uri=${DIGEST}" >> "$GITHUB_OUTPUT"
