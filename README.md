@@ -30,14 +30,14 @@ bootstrap/             # one-time: APIs, bucket de state, WIF pool/provider, SA 
 ```yaml
 jobs:
   ci:
-    uses: cm-ventures/cm-infra/.github/workflows/django-ci.yml@main
+    uses: cm-tech-ventures/cm-infra/.github/workflows/django-ci.yml@main
   build:
     needs: ci
-    uses: cm-ventures/cm-infra/.github/workflows/build-and-push.yml@main
+    uses: cm-tech-ventures/cm-infra/.github/workflows/build-and-push.yml@main
     with: { image-name: cm-identity, gcp-region: ..., gcp-project-id: ..., artifact-repository: cm-cores, workload-identity-provider: ..., deploy-service-account: ... }
   deploy:
     needs: build
-    uses: cm-ventures/cm-infra/.github/workflows/deploy-cloud-run.yml@main
+    uses: cm-tech-ventures/cm-infra/.github/workflows/deploy-cloud-run.yml@main
     with: { service: cm-identity, image-uri: ${{ needs.build.outputs.image-uri }}, state-bucket: ..., workload-identity-provider: ..., deploy-service-account: ... }
 ```
 
@@ -50,12 +50,12 @@ injeta `bucket` e `prefix=<service>/<environment>` no `init`.
 ```bash
 cd bootstrap
 terraform init -backend=false   # primeiro apply com state local
-terraform apply -var project_id=... -var github_owner=cm-ventures \
-  -var 'github_repositories=["cm-ventures/cm-identity", ...]' \
-  -var state_bucket_name=cm-ventures-tf-state
+terraform apply -var project_id=... -var github_owner=cm-tech-ventures \
+  -var 'github_repositories=["cm-tech-ventures/cm-identity", ...]' \
+  -var state_bucket_name=cm-tech-ventures-tf-state
 # depois migre o state para o bucket recém-criado:
 terraform init -migrate-state \
-  -backend-config="bucket=cm-ventures-tf-state" -backend-config="prefix=bootstrap/prod"
+  -backend-config="bucket=cm-tech-ventures-tf-state" -backend-config="prefix=bootstrap/prod"
 ```
 
 Outputs do bootstrap (`workload_identity_provider`, `deploy_service_account`,
