@@ -37,6 +37,13 @@ on:
         description: URL do endpoint de introspeção do cm-identity (obrigatório para cores que usam autenticação)
         type: string
         default: ""
+    secrets:
+      infra-modules-token:
+        description: >
+          PAT fine-grained (contents:read) com acesso ao repo cm-infra, usado só para o
+          `terraform init` baixar os módulos via git HTTPS (github.token não alcança
+          outro repo privado). Ver CMV-28.
+        required: true
 
 permissions:
   contents: read
@@ -62,10 +69,12 @@ jobs:
           terraform_version: ${{ inputs.terraform-version }}
 
       # Módulos Terraform referenciam cm-infra via git HTTPS (repo privado).
-      # Redireciona para URL autenticada com o token do Actions antes do init.
+      # github.token só alcança o repo que disparou o run — não o cm-infra.
+      # Por isso usamos um PAT dedicado (secrets.infra-modules-token), só com
+      # leitura de conteúdo, passado explicitamente pelo repo chamador.
       - name: Configure git para módulos privados do Terraform
         run: |
-          git config --global url."https://x-access-token:${{ github.token }}@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://x-access-token:${{ secrets.infra-modules-token }}@github.com/".insteadOf "https://github.com/"
 
       - name: Terraform init (backend GCS, state por serviço/ambiente)
         run: |
