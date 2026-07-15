@@ -97,17 +97,20 @@ resource "google_project_iam_member" "deployer_roles" {
 
 # secretmanager.viewer não é suficiente: o módulo cloud-run-service cria bindings IAM
 # (google_secret_manager_secret_iam_member), o que exige setIamPolicy — só secretmanager.admin
-# concede isso. Escopado por condição a secrets "cm-*" para não abrir admin sobre segredos
-# de outros sistemas do projeto.
+# concede isso. Escopado por condição ao padrão real de nome usado pelo cm-service-template
+# (<service_name>-database-url, <service_name>-django-secret-key — ver infra/main.tf dos
+# cores) para não abrir admin sobre segredos de outros sistemas do projeto. O prefixo "cm-"
+# usado antes nunca correspondia a nenhum secret real (CMV-28) — se um core novo precisar
+# de outro tipo de segredo, estenda este regex.
 resource "google_project_iam_member" "deployer_secretmanager_admin" {
   project = var.project_id
   role    = "roles/secretmanager.admin"
   member  = "serviceAccount:${google_service_account.deployer.email}"
 
   condition {
-    title       = "cm-secrets-only"
-    description = "Admin restrito a secrets com prefixo cm- (segredos dos cores)."
-    expression  = "resource.name.startsWith(\"projects/${var.project_id}/secrets/cm-\")"
+    title       = "core-secrets-only"
+    description = "Admin restrito aos secrets padrão dos cores (sufixo -database-url / -django-secret-key)."
+    expression  = "resource.name.startsWith(\"projects/${var.project_id}/secrets/\") && (resource.name.endsWith(\"-database-url\") || resource.name.endsWith(\"-django-secret-key\"))"
   }
 }
 
