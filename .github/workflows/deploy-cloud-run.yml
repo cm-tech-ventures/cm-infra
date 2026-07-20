@@ -140,7 +140,9 @@ jobs:
         run: |
           extra_args=()
           while IFS= read -r line; do
-            [ -n "$line" ] && extra_args+=("$line")
+            # eval para interpretar as aspas em -var="key=value" corretamente;
+            # sem eval, as aspas ficam literais e corrompem os nomes das variáveis.
+            [ -n "$line" ] && eval "extra_args+=($line)"
           done <<< "$EXTRA_TFVARS"
 
           terraform apply -input=false -auto-approve \
