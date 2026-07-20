@@ -51,8 +51,17 @@ on:
         description: >
           PAT fine-grained (contents:read) com acesso ao repo cm-infra, usado só para o
           `terraform init` baixar os módulos via git HTTPS (github.token não alcança
-          outro repo privado). Ver CMV-29.
-        required: true
+          outro repo privado). Ver CMV-29. Alternativa: INFRA_MODULES_DEPLOY_KEY
+          (chave SSH), para chamadores fora da org cm-tech-ventures que não herdam
+          o secret de org. Pelo menos um dos dois é obrigatório.
+        required: false
+      INFRA_MODULES_DEPLOY_KEY:
+        description: >
+          Chave privada SSH (ed25519) de uma deploy key somente-leitura cadastrada
+          em cm-tech-ventures/cm-infra, usada para o `terraform init` baixar os
+          módulos quando o chamador não tem acesso ao PAT de org INFRA_MODULES_TOKEN
+          (ex.: repos fora da org cm-tech-ventures, como sys-bjj-frontend — CMV-136).
+        required: false
 
 permissions:
   contents: read
@@ -79,14 +88,41 @@ jobs:
 
       # Módulos Terraform referenciam cm-infra via git HTTPS (repo privado).
       # github.token só alcança o repo que disparou o run — não o cm-infra.
-      # Por isso usamos um PAT dedicado (secrets.INFRA_MODULES_TOKEN), só com
-      # leitura de conteúdo, passado explicitamente pelo repo chamador.
-      - name: Configure git para módulos privados do Terraform
+      # Cores dentro da org cm-tech-ventures usam o PAT de org (INFRA_MODULES_TOKEN,
+      # ver CMV-29). Chamadores fora da org (ex.: sys-bjj-frontend) não herdam esse
+      # secret e usam INFRA_MODULES_DEPLOY_KEY (deploy key SSH somente-leitura,
+      # CMV-136) — o módulo é então buscado via SSH em vez de HTTPS.
+      - name: Configure git para módulos privados do Terraform (PAT HTTPS)
+        if: ${{ secrets.INFRA_MODULES_TOKEN != '' }}
         env:
           INFRA_MODULES_TOKEN: ${{ secrets.INFRA_MODULES_TOKEN }}
         run: |
           token="$(printf '%s' "$INFRA_MODULES_TOKEN" | tr -d '[:space:]')"
           git config --global url."https://x-access-token:${token}@github.com/".insteadOf "https://github.com/"
+
+      - name: Configure git para módulos privados do Terraform (deploy key SSH)
+        if: ${{ secrets.INFRA_MODULES_TOKEN == '' && secrets.INFRA_MODULES_DEPLOY_KEY != '' }}
+        env:
+          INFRA_MODULES_DEPLOY_KEY: ${{ secrets.INFRA_MODULES_DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$INFRA_MODULES_DEPLOY_KEY" > ~/.ssh/infra_modules_key
+          chmod 600 ~/.ssh/infra_modules_key
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+          eval "$(ssh-agent -s)"
+          ssh-add ~/.ssh/infra_modules_key
+          {
+            echo "GIT_SSH_COMMAND=ssh -i $HOME/.ssh/infra_modules_key -o IdentitiesOnly=yes"
+            echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK"
+            echo "SSH_AGENT_PID=$SSH_AGENT_PID"
+          } >> "$GITHUB_ENV"
+          git config --global url."git@github.com:".insteadOf "https://github.com/"
+
+      - name: Validar credencial dos módulos do Terraform
+        if: ${{ secrets.INFRA_MODULES_TOKEN == '' && secrets.INFRA_MODULES_DEPLOY_KEY == '' }}
+        run: |
+          echo "::error::Nenhuma credencial configurada para baixar os módulos do cm-infra. Configure o secret INFRA_MODULES_TOKEN (PAT, cores na org cm-tech-ventures) ou INFRA_MODULES_DEPLOY_KEY (deploy key SSH, chamadores externos)." >&2
+          exit 1
 
       - name: Terraform init (backend GCS, state por serviço/ambiente)
         run: |
