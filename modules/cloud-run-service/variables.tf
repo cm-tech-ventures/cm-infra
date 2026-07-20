@@ -95,6 +95,8 @@ variable "release_command" {
     Comando do Cloud Run Job de release (schema + migrate), executado pelo
     deploy-cloud-run.yml antes de servir tráfego na nova revisão. Default
     assume o management command `release` do cm-service-template (CMV-39).
+    Use [] para serviços sem etapa de release (ex. frontend Node/Next.js —
+    CMV-136): o Job nem é criado, e deploy-cloud-run.yml pula a execução.
   EOT
   type        = list(string)
   default     = ["python", "manage.py", "release"]

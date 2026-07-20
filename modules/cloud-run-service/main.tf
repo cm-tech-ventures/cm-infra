@@ -93,7 +93,11 @@ resource "google_cloud_run_v2_service" "service" {
 # tráfego na nova revisão: cria o schema Postgres do serviço (se necessário)
 # e roda as migrations. Mesma imagem do serviço web, comando sobrescrito.
 # Idempotente por construção (CREATE SCHEMA IF NOT EXISTS + migrate) — CMV-39.
+# Opcional: release_command = [] pula a criação do Job (serviços sem etapa de
+# release, ex. frontends estáticos/Next.js — CMV-136). deploy-cloud-run.yml já
+# trata release_job_name ausente como "sem release job" (best-effort).
 resource "google_cloud_run_v2_job" "release" {
+  count    = length(var.release_command) > 0 ? 1 : 0
   project  = var.project_id
   name     = "${var.service_name}-release"
   location = var.region

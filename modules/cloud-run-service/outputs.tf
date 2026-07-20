@@ -14,6 +14,10 @@ output "service_name" {
 }
 
 output "release_job_name" {
-  description = "Nome do Cloud Run Job de release (schema + migrate) — ver CMV-39."
-  value       = google_cloud_run_v2_job.release.name
+  description = <<-EOT
+    Nome do Cloud Run Job de release (schema + migrate) — ver CMV-39.
+    Null quando release_command = [] (serviço sem etapa de release, ex.
+    frontend Node — CMV-136); deploy-cloud-run.yml trata isso como no-op.
+  EOT
+  value       = try(google_cloud_run_v2_job.release[0].name, null)
 }
