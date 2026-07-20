@@ -37,6 +37,15 @@ on:
         description: URL do endpoint de introspeção do cm-identity (obrigatório para cores que usam autenticação)
         type: string
         default: ""
+      extra-tfvars:
+        description: >
+          Flags `-var="chave=valor"` adicionais, uma por linha, para variáveis do
+          main.tf do chamador que não são cobertas pelos inputs padrão (ex.:
+          project_id/region/deployer_service_account para serviços fora do padrão
+          Django dos cores, como o frontend-bjj). Repassado literalmente ao
+          `terraform apply` — cada linha vira um argumento.
+        type: string
+        default: ""
     secrets:
       INFRA_MODULES_TOKEN:
         description: >
@@ -86,12 +95,20 @@ jobs:
             -backend-config="prefix=${{ inputs.service }}/${{ inputs.environment }}"
 
       - name: Terraform apply
+        env:
+          EXTRA_TFVARS: ${{ inputs.extra-tfvars }}
         run: |
+          extra_args=()
+          while IFS= read -r line; do
+            [ -n "$line" ] && extra_args+=("$line")
+          done <<< "$EXTRA_TFVARS"
+
           terraform apply -input=false -auto-approve \
             -var="image=${{ inputs.image-uri }}" \
             -var="environment=${{ inputs.environment }}" \
             -var="service_name=${{ inputs.service }}" \
-            -var="identity_introspection_url=${{ inputs.identity-introspection-url }}"
+            -var="identity_introspection_url=${{ inputs.identity-introspection-url }}" \
+            "${extra_args[@]}"
 
       - uses: google-github-actions/setup-gcloud@v2
 
