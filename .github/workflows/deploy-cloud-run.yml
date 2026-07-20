@@ -92,8 +92,21 @@ jobs:
       # ver CMV-29). Chamadores fora da org (ex.: sys-bjj-frontend) não herdam esse
       # secret e usam INFRA_MODULES_DEPLOY_KEY (deploy key SSH somente-leitura,
       # CMV-136) — o módulo é então buscado via SSH em vez de HTTPS.
+      # `secrets.*` não pode ser referenciado direto em `if:` de step (erro
+      # "Unrecognized named-value: 'secrets'" — GITHUB-136). Detecta a
+      # credencial disponível aqui e usa os outputs deste step nos `if:`
+      # seguintes.
+      - name: Detectar credencial disponível para módulos do Terraform
+        id: infra-modules-cred
+        env:
+          INFRA_MODULES_TOKEN: ${{ secrets.INFRA_MODULES_TOKEN }}
+          INFRA_MODULES_DEPLOY_KEY: ${{ secrets.INFRA_MODULES_DEPLOY_KEY }}
+        run: |
+          echo "has-token=$([ -n "$INFRA_MODULES_TOKEN" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "has-deploy-key=$([ -n "$INFRA_MODULES_DEPLOY_KEY" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
       - name: Configure git para módulos privados do Terraform (PAT HTTPS)
-        if: ${{ secrets.INFRA_MODULES_TOKEN != '' }}
+        if: steps.infra-modules-cred.outputs.has-token == 'true'
         env:
           INFRA_MODULES_TOKEN: ${{ secrets.INFRA_MODULES_TOKEN }}
         run: |
@@ -101,7 +114,7 @@ jobs:
           git config --global url."https://x-access-token:${token}@github.com/".insteadOf "https://github.com/"
 
       - name: Configure git para módulos privados do Terraform (deploy key SSH)
-        if: ${{ secrets.INFRA_MODULES_TOKEN == '' && secrets.INFRA_MODULES_DEPLOY_KEY != '' }}
+        if: steps.infra-modules-cred.outputs.has-token == 'false' && steps.infra-modules-cred.outputs.has-deploy-key == 'true'
         env:
           INFRA_MODULES_DEPLOY_KEY: ${{ secrets.INFRA_MODULES_DEPLOY_KEY }}
         run: |
@@ -119,7 +132,7 @@ jobs:
           git config --global url."git@github.com:".insteadOf "https://github.com/"
 
       - name: Validar credencial dos módulos do Terraform
-        if: ${{ secrets.INFRA_MODULES_TOKEN == '' && secrets.INFRA_MODULES_DEPLOY_KEY == '' }}
+        if: steps.infra-modules-cred.outputs.has-token == 'false' && steps.infra-modules-cred.outputs.has-deploy-key == 'false'
         run: |
           echo "::error::Nenhuma credencial configurada para baixar os módulos do cm-infra. Configure o secret INFRA_MODULES_TOKEN (PAT, cores na org cm-tech-ventures) ou INFRA_MODULES_DEPLOY_KEY (deploy key SSH, chamadores externos)." >&2
           exit 1
