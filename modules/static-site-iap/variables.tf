@@ -34,14 +34,31 @@ variable "iap_oauth_client_secret" {
   sensitive   = true
 }
 
-variable "iap_authorized_group" {
+variable "iap_authorized_members" {
   description = <<-EOT
-    Identidade do Google Group autorizado a acessar o site via IAP, no formato
-    'group:nome-do-grupo@dominio.com'. Deve conter exatamente os membros com direito
-    de visualizar o dashboard (ex: board + dono do MD). Nunca hardcodar e-mail
-    individual real neste módulo — sempre um grupo gerenciado no Google Workspace.
+    Lista de identidades IAM autorizadas a acessar o site via IAP, cada uma no
+    formato aceito por `member` do IAM ('user:pessoa@dominio.com' ou
+    'group:nome-do-grupo@googlegroups.com'). Deve conter exatamente quem tem
+    direito de visualizar o dashboard (ex: board + dono do MD).
+
+    Contas GCP sem organização/Workspace não têm domínio para um Google Group
+    gerenciado — nesse caso, use `user:` diretamente para cada pessoa. Se no
+    futuro existir um Workspace, prefira um único `group:...@googlegroups.com`
+    ou grupo de domínio para não precisar tocar Terraform a cada troca de membro.
   EOT
-  type        = string
+  type        = list(string)
+
+  validation {
+    condition     = length(var.iap_authorized_members) > 0
+    error_message = "iap_authorized_members não pode ser vazio."
+  }
+
+  validation {
+    condition = alltrue([
+      for m in var.iap_authorized_members : can(regex("^(user|group|serviceAccount|domain):.+", m))
+    ])
+    error_message = "cada membro deve estar no formato 'user:...', 'group:...', 'serviceAccount:...' ou 'domain:...'."
+  }
 }
 
 variable "runtime_service_account_email" {
