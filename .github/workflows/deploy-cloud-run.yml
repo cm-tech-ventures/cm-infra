@@ -62,6 +62,15 @@ on:
           módulos quando o chamador não tem acesso ao PAT de org INFRA_MODULES_TOKEN
           (ex.: repos fora da org cm-tech-ventures, como sys-bjj-frontend — CMV-136).
         required: false
+      EXTRA_TFVARS_SECRET:
+        description: >
+          Flags `-var="chave=valor"` adicionais sensíveis, uma por linha, mesmo
+          formato do input `extra-tfvars` — mas passado via `secrets:` porque o
+          contexto `secrets` não é permitido dentro de `with:` no workflow
+          chamador (erro "Unrecognized named-value: 'secrets'"). Use para
+          credenciais como client secret de OAuth/IAP (ex.: CMV-259). Concatenado
+          com `extra-tfvars` antes do apply.
+        required: false
 
 permissions:
   contents: read
@@ -137,13 +146,14 @@ jobs:
       - name: Terraform apply
         env:
           EXTRA_TFVARS: ${{ inputs.extra-tfvars }}
+          EXTRA_TFVARS_SECRET: ${{ secrets.EXTRA_TFVARS_SECRET }}
         run: |
           extra_args=()
           while IFS= read -r line; do
             # eval para interpretar as aspas em -var="key=value" corretamente;
             # sem eval, as aspas ficam literais e corrompem os nomes das variáveis.
             [ -n "$line" ] && eval "extra_args+=($line)"
-          done <<< "$EXTRA_TFVARS"
+          done <<< "$EXTRA_TFVARS"$'\n'"$EXTRA_TFVARS_SECRET"
 
           terraform apply -input=false -auto-approve \
             -var="image=${{ inputs.image-uri }}" \
