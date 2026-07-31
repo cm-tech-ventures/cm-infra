@@ -17,3 +17,8 @@ output "artifact_repository_url" {
   description = "URL base do Artifact Registry dos cores."
   value       = module.artifact_registry.repository_url
 }
+
+output "ops_observer_service_account" {
+  description = "Email da SA read-only de observabilidade — usar em --impersonate-service-account na rotina Ops semanal (CMV-319)."
+  value       = google_service_account.ops_observer.email
+}

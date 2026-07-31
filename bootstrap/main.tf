@@ -178,6 +178,42 @@ resource "google_storage_bucket_iam_member" "deployer_state" {
   member = "serviceAccount:${google_service_account.deployer.email}"
 }
 
+# --- SA read-only de observabilidade (rotina Ops semanal — CMV-319) ---
+# Sem chave JSON: a rotina assume esta SA via impersonation
+# (gcloud --impersonate-service-account) a partir da identidade local listada em
+# var.ops_observer_impersonators. Somente roles de leitura — a rotina só lê
+# (list/describe/logs read), nunca age no GCP.
+resource "google_service_account" "ops_observer" {
+  project      = var.project_id
+  account_id   = "cm-ops-observer"
+  display_name = "Ops semanal — leitura read-only (CMV-319)"
+}
+
+resource "google_project_iam_member" "ops_observer_roles" {
+  for_each = toset([
+    "roles/run.viewer",
+    "roles/monitoring.viewer",
+    "roles/logging.viewer",
+  ])
+  project = var.project_id
+  role    = each.value
+  member  = "serviceAccount:${google_service_account.ops_observer.email}"
+}
+
+resource "google_billing_account_iam_member" "ops_observer_billing_viewer" {
+  count              = var.billing_account_id != "" ? 1 : 0
+  billing_account_id = var.billing_account_id
+  role               = "roles/billing.viewer"
+  member             = "serviceAccount:${google_service_account.ops_observer.email}"
+}
+
+resource "google_service_account_iam_member" "ops_observer_token_creator" {
+  for_each           = toset(var.ops_observer_impersonators)
+  service_account_id = google_service_account.ops_observer.name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = each.value
+}
+
 # --- Artifact Registry compartilhado dos cores ---
 module "artifact_registry" {
   source        = "../modules/artifact-registry"

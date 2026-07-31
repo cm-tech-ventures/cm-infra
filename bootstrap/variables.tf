@@ -29,3 +29,15 @@ variable "state_bucket_name" {
   description = "Nome do bucket GCS de state do Terraform."
   type        = string
 }
+
+variable "ops_observer_impersonators" {
+  description = "Identidades (formato IAM member, ex: user:foo@bar.com) autorizadas a assumir a SA cm-ops-observer via impersonation (CMV-319)."
+  type        = list(string)
+  default     = []
+}
+
+variable "billing_account_id" {
+  description = "ID da billing account (formato XXXXXX-XXXXXX-XXXXXX) para conceder roles/billing.viewer à SA cm-ops-observer. Vazio pula o grant (CMV-319)."
+  type        = string
+  default     = ""
+}
