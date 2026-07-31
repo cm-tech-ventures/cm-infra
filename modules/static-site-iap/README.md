@@ -51,14 +51,21 @@ no backend bucket (ver seção de limitação do provider abaixo) falha, pois o
 `gcloud compute backend-buckets update --iap=...` exige um client OAuth já
 existente.
 
-## Pré-requisito: grupo Google autorizado
+## Pré-requisito: membros autorizados
 
-`iap_authorized_group` deve ser um Google Group já existente no Workspace da
-empresa (ex: `group:board-and-md-owner@cm-ventures.com`), contendo exatamente
-as pessoas com direito de ver o dashboard (board + dono do MD). Gerenciar
-membros do grupo é responsabilidade de quem administra o Workspace, fora deste
-módulo — o Terraform só concede o papel de IAP ao grupo, não gerencia seus
-membros.
+`iap_authorized_members` é uma lista de identidades IAM (uma entrada por
+pessoa ou grupo) com direito de ver o dashboard. Formatos aceitos:
+`user:pessoa@dominio.com`, `group:nome@googlegroups.com`,
+`serviceAccount:...`, `domain:...`.
+
+Em conta GCP sem organização/Workspace não existe domínio para um Google
+Group gerenciado — nesse caso liste cada pessoa diretamente com `user:...`
+(ex: `["user:board@cm-ventures.com", "user:dono-md@cm-ventures.com"]`). Se no
+futuro a empresa tiver Workspace, prefira consolidar em um único
+`group:...@googlegroups.com` ou grupo de domínio, e gerenciar a lista de
+membros fora do Terraform (responsabilidade de quem administra o grupo) — o
+Terraform só concede o papel de IAP a cada identidade da lista, não gerencia
+membros de grupo.
 
 ## Como funciona a publicação atômica (blue/green no Load Balancer)
 
@@ -138,7 +145,7 @@ a suportar `iap` em `google_compute_backend_bucket`.
 | `project_id` | Projeto GCP |
 | `region` | Região dos buckets GCS |
 | `iap_oauth_client_id` / `iap_oauth_client_secret` | Credenciais OAuth do IAP (ver pré-requisito manual acima) |
-| `iap_authorized_group` | Grupo Google autorizado (`group:...`) |
+| `iap_authorized_members` | Lista de identidades IAM autorizadas (`user:...`, `group:...`) |
 | `runtime_service_account_email` | SA que escreve nos buckets e flipa o url_map (normalmente `service_account_email` do módulo `cloud-run-job` do pipeline) |
 | `active_color` | Cor ativa no apply inicial (`"blue"` por padrão) |
 

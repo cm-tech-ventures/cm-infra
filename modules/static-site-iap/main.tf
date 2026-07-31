@@ -84,8 +84,8 @@ resource "null_resource" "backend_bucket_iap" {
   depends_on = [google_compute_backend_bucket.site]
 }
 
-# IAM do IAP: concede ao grupo autorizado o papel para passar pelo IAP e chegar
-# ao backend bucket. O grupo autorizado deve conter só quem tem direito de ver o
+# IAM do IAP: concede a cada membro autorizado o papel para passar pelo IAP e
+# chegar ao backend bucket. A lista deve conter só quem tem direito de ver o
 # dashboard (ex: board + dono do MD) — nunca conceder no nível do projeto inteiro.
 #
 # Nome do resource verificado nesta implementação via `terraform providers
@@ -94,13 +94,16 @@ resource "null_resource" "backend_bucket_iap" {
 # provider google padrão e aceita o argumento web_backend_service = nome do
 # backend bucket/service. Ainda assim, re-confirme contra a versão do provider
 # realmente pinada no lockfile do ambiente antes do primeiro apply em produção.
-resource "google_iap_web_backend_service_iam_member" "authorized_group" {
-  for_each = toset(local.colors)
+resource "google_iap_web_backend_service_iam_member" "authorized_members" {
+  for_each = {
+    for pair in setproduct(local.colors, var.iap_authorized_members) :
+    "${pair[0]}|${pair[1]}" => { color = pair[0], member = pair[1] }
+  }
 
   project             = var.project_id
-  web_backend_service = google_compute_backend_bucket.site[each.key].name
+  web_backend_service = google_compute_backend_bucket.site[each.value.color].name
   role                = "roles/iap.httpsResourceAccessor"
-  member              = var.iap_authorized_group
+  member              = each.value.member
 }
 
 # ---------------------------------------------------------------------------
