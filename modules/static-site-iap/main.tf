@@ -134,6 +134,12 @@ resource "google_cloud_run_v2_service" "proxy" {
   template {
     service_account = google_service_account.proxy.email
 
+    # Sidecars (multi-container) exigem o ambiente de execução gen2 — no gen1
+    # (default), o container secundário falha ao iniciar com "no such file or
+    # directory" mesmo quando o binário existe na imagem (confirmado em apply
+    # real, CMV-346).
+    execution_environment = "EXECUTION_ENVIRONMENT_GEN2"
+
     scaling {
       min_instance_count = 0
       max_instance_count = var.proxy_max_instances
