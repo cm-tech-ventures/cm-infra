@@ -92,6 +92,23 @@ resource "google_storage_bucket_iam_member" "proxy_reader" {
   member = "serviceAccount:${google_service_account.proxy.email}"
 }
 
+# A SA de runtime do serviço (usada pelos dois containers, incluindo o
+# oauth2-proxy) precisa ler os 4 secrets referenciados via value_source no
+# container oauth2-proxy abaixo (client id/secret/cookie/allowlist).
+resource "google_secret_manager_secret_iam_member" "proxy_secret_accessor" {
+  for_each = toset([
+    var.oauth_client_id_secret_id,
+    var.oauth_client_secret_secret_id,
+    var.cookie_secret_id,
+    var.allowed_emails_secret_id,
+  ])
+
+  project   = var.project_id
+  secret_id = each.value
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.proxy.email}"
+}
+
 # ---------------------------------------------------------------------------
 # Cloud Run service: dois containers no mesmo serviço (sidecar).
 #
