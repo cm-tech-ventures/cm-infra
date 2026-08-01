@@ -122,11 +122,11 @@ resource "google_cloud_run_v2_service" "proxy" {
 resource "google_iap_web_cloud_run_service_iam_member" "authorized_members" {
   for_each = toset(var.iap_authorized_members)
 
-  project           = var.project_id
-  location          = google_cloud_run_v2_service.proxy.location
-  cloud_run_service = google_cloud_run_v2_service.proxy.name
-  role              = "roles/iap.httpsResourceAccessor"
-  member            = each.value
+  project                = var.project_id
+  location               = google_cloud_run_v2_service.proxy.location
+  cloud_run_service_name = google_cloud_run_v2_service.proxy.name
+  role                   = "roles/iap.httpsResourceAccessor"
+  member                 = each.value
 }
 
 # ---------------------------------------------------------------------------
