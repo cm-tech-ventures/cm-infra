@@ -73,19 +73,16 @@ resource "google_storage_bucket_iam_member" "proxy_reader" {
 # proxy — a URL pública `*.run.app` nunca fica de fato aberta.
 # ---------------------------------------------------------------------------
 resource "google_cloud_run_v2_service" "proxy" {
+  provider = google-beta
   project  = var.project_id
   name     = "${var.name}-site-proxy"
   location = var.region
   ingress  = "INGRESS_TRAFFIC_ALL"
 
-  # IAP nativo do Cloud Run (sem LB), disponível no provider google >= 6.14
-  # como campo `iap_enabled` do serviço (ver
-  # https://cloud.google.com/iap/docs/enabling-cloud-run). PENDENTE DE
-  # VALIDAÇÃO contra a versão do provider fixada em versions.tf antes do
-  # primeiro apply desta revisão — se a versão travada não expuser o campo,
-  # atualizar o `required_providers` (não há workaround de outro recurso
-  # Terraform conhecido; documentar no README caso um `terraform plan` real
-  # rejeite o atributo).
+  # IAP nativo do Cloud Run (sem LB): `iap_enabled` só existe no schema do
+  # provider google-beta (confirmado via `terraform providers schema` num
+  # plan real na CMV-346 — o provider "google" padrão não expõe o campo,
+  # mesmo travado em >= 6.14). Precisa do `provider = google-beta` acima.
   iap_enabled = true
 
   template {
