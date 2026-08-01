@@ -156,6 +156,23 @@ resource "google_cloud_run_v2_service" "proxy" {
         container_port = var.oauth2_proxy_port
       }
 
+      # Startup probe explícito: o default do Cloud Run (multi-container) é
+      # agressivo demais para o oauth2-proxy, que faz uma chamada de rede
+      # (OIDC discovery do provider Google) antes de abrir a porta — o probe
+      # padrão falhava com "STARTUP TCP probe failed 1 time consecutively"
+      # mesmo o processo subindo corretamente (confirmado local via `docker
+      # run` com a mesma config, que respondeu normalmente). Folga generosa
+      # aqui é barata: só afeta o cold start (min_instance_count = 0).
+      startup_probe {
+        tcp_socket {
+          port = var.oauth2_proxy_port
+        }
+        initial_delay_seconds = 5
+        timeout_seconds       = 3
+        period_seconds        = 3
+        failure_threshold     = 10
+      }
+
       # `command` explícito: sem ele, o Cloud Run (multi-container/sidecar)
       # não resolve o ENTRYPOINT da imagem e tenta executar o primeiro item
       # de `args` como binário (falha: "error finding executable
