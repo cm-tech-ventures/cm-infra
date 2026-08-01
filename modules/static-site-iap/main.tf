@@ -48,8 +48,12 @@ resource "google_storage_bucket" "site" {
 # publicação (que tem write).
 # ---------------------------------------------------------------------------
 resource "google_service_account" "proxy" {
-  project      = var.project_id
-  account_id   = "${var.name}-site-proxy"
+  project = var.project_id
+  # account_id do GCP tem limite de 30 chars — var.name já pode ter até 41
+  # (ver validation em variables.tf), então trunca antes de anexar o sufixo
+  # em vez de simplesmente concatenar (que estourava o limite para nomes
+  # como "cm-analytics-dashboard", 22 chars + "-site-proxy" = 33).
+  account_id   = substr("${var.name}-proxy", 0, 30)
   display_name = "Proxy read-only do site estático ${var.name} (GCS -> HTTP)"
 }
 
