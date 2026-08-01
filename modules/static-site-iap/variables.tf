@@ -1,5 +1,5 @@
 variable "name" {
-  description = "Nome base do site estático (kebab-case). Usado como prefixo do bucket, proxy, backend e recursos de rede."
+  description = "Nome base do site estático (kebab-case). Usado como prefixo do bucket e do serviço Cloud Run proxy."
   type        = string
 
   validation {
@@ -14,24 +14,8 @@ variable "project_id" {
 }
 
 variable "region" {
-  description = "Região usada para o bucket, o serviço proxy (Cloud Run) e o Serverless NEG. O Load Balancer em si é global."
+  description = "Região usada para o bucket e o serviço proxy (Cloud Run)."
   type        = string
-}
-
-variable "iap_oauth_client_id" {
-  description = <<-EOT
-    Client ID do OAuth2 usado pelo IAP. Precisa ser criado MANUALMENTE no console GCP
-    (tela "OAuth consent screen" / "Credentials" do projeto) antes do apply — não é
-    terraformável sem permissão de admin de organização. Ver README.md deste módulo.
-  EOT
-  type        = string
-  sensitive   = true
-}
-
-variable "iap_oauth_client_secret" {
-  description = "Client Secret correspondente ao iap_oauth_client_id. Também criado manualmente no console GCP."
-  type        = string
-  sensitive   = true
 }
 
 variable "iap_authorized_members" {
