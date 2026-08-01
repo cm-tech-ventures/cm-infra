@@ -78,15 +78,20 @@ resource "null_resource" "backend_bucket_iap" {
   # Backend buckets só aceitam IAP via REST API diretamente — chamada via curl.
   # Verificado contra gcloud 2.336.0 em 2026-08-01 (run CI que falhou com
   # "unrecognized arguments: --iap").
+  # `interpreter` explícito: o default do local-exec é /bin/sh, que em CI
+  # Ubuntu é dash e rejeita `set -o pipefail`. O body vai via stdin (`-d @-`)
+  # para o secret não aparecer no argv do curl (/proc/*/cmdline).
   provisioner "local-exec" {
-    command = <<-EOT
+    interpreter = ["/bin/bash", "-c"]
+    command     = <<-EOT
       set -euo pipefail
       ACCESS_TOKEN=$(gcloud auth print-access-token)
+      printf '%s' '{"iap":{"enabled":true,"oauth2ClientId":"${var.iap_oauth_client_id}","oauth2ClientSecret":"${var.iap_oauth_client_secret}"}}' | \
       curl -sf -X PATCH \
         "https://compute.googleapis.com/compute/v1/projects/${var.project_id}/global/backendBuckets/${google_compute_backend_bucket.site[each.key].name}" \
         -H "Authorization: Bearer $ACCESS_TOKEN" \
         -H "Content-Type: application/json" \
-        -d '{"iap":{"enabled":true,"oauth2ClientId":"${var.iap_oauth_client_id}","oauth2ClientSecret":"${var.iap_oauth_client_secret}"}}'
+        -d @-
     EOT
   }
 
