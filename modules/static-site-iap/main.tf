@@ -133,6 +133,31 @@ resource "google_iap_web_cloud_run_service_iam_member" "authorized_members" {
 }
 
 # ---------------------------------------------------------------------------
+# Service agent do IAP -> roles/run.invoker no serviço proxy.
+#
+# IAP autentica/autoriza o usuário (bloco acima), mas quem de fato invoca o
+# Cloud Run por trás do IAP é o próprio service agent do IAP
+# (`service-{PROJECT_NUMBER}@gcp-sa-iap.iam.gserviceaccount.com`). Sem
+# roles/run.invoker para esse agent, o IAP autentica corretamente e o Cloud
+# Run ainda assim devolve 403 (revisão do CTO na CMV-346, condição 1).
+# `google_project_service_identity` (provider google-beta) obtém esse e-mail
+# sem precisar do número do projeto como input explícito.
+# ---------------------------------------------------------------------------
+resource "google_project_service_identity" "iap" {
+  provider = google-beta
+  project  = var.project_id
+  service  = "iap.googleapis.com"
+}
+
+resource "google_cloud_run_v2_service_iam_member" "iap_invoker" {
+  project  = var.project_id
+  location = google_cloud_run_v2_service.proxy.location
+  name     = google_cloud_run_v2_service.proxy.name
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${google_project_service_identity.iap.email}"
+}
+
+# ---------------------------------------------------------------------------
 # A SA de runtime do job de publicação (dlt->dbt->Evidence) escreve as builds
 # versionadas e o objeto-ponteiro. Só write no bucket — ela nunca precisa
 # tocar em recursos de rede/LB (que não existem mais nesta arquitetura).

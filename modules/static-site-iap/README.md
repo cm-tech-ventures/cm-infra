@@ -120,15 +120,38 @@ core (ex: `cm-analytics`), não gerenciada por este módulo — o
 `lifecycle.ignore_changes` no `google_cloud_run_v2_service.proxy` evita que um
 `terraform apply` de rotina reverta um rollout de imagem novo.
 
+## IAM: quem invoca o Cloud Run por trás do IAP
+
+`google_iap_web_cloud_run_service_iam_member` concede `roles/iap.httpsResourceAccessor`
+a cada identidade de `iap_authorized_members` — isso autoriza o IAP a deixar
+a pessoa passar. Mas quem de fato invoca o Cloud Run (a chamada HTTP real por
+trás do proxy do IAP) é o **service agent do próprio IAP**
+(`service-{PROJECT_NUMBER}@gcp-sa-iap.iam.gserviceaccount.com`), não o
+usuário final. Sem `roles/run.invoker` para esse service agent, o IAP
+autentica corretamente e o Cloud Run ainda assim devolve 403 (gap encontrado
+na revisão do CTO na CMV-346, condição 1).
+
+Este módulo resolve o e-mail do service agent com
+`google_project_service_identity` (recurso do provider `google-beta` — por
+isso `versions.tf` exige `google-beta` além de `google`, e o root module que
+instanciar este módulo precisa declarar/configurar ambos os providers) e
+concede `roles/run.invoker` a ele via `google_cloud_run_v2_service_iam_member`.
+**Nunca** conceder `roles/run.invoker` a `allUsers` — o único caminho de
+invocação deve passar pelo IAP.
+
 ## Nota de validação pendente (CMV-346)
 
-O campo `iap_enabled` em `google_cloud_run_v2_service` e o recurso
-`google_iap_web_cloud_run_service_iam_member` foram escritos com base na
+O campo `iap_enabled` em `google_cloud_run_v2_service`, o recurso
+`google_iap_web_cloud_run_service_iam_member` e o binding de
+`roles/run.invoker` para o service agent do IAP foram escritos com base na
 documentação pública do IAP nativo em Cloud Run — **confirmar contra um
-`terraform plan` real** (ou `terraform providers schema -json`) antes do
-primeiro apply desta revisão, do mesmo jeito que a v1→v2 foi validada. Se o
-provider fixado em `versions.tf` não expuser esses recursos, ajustar a
-version constraint antes de prosseguir.
+`terraform plan`/`apply` real** antes de considerar a revisão fechada, do
+mesmo jeito que a v1→v2 foi validada. Sem `terraform` disponível no ambiente
+deste agente, esta revisão não pôde rodar `terraform validate`/`plan`
+localmente — confirmar sintaxe e comportamento no primeiro apply (condição 2
+da revisão do CTO). Após o apply, validar que uma requisição anônima à URL
+`*.run.app` recebe redirect de login/403 e que um usuário fora de
+`iap_authorized_members` recebe 403 (condição 3).
 
 ## Variáveis principais
 
