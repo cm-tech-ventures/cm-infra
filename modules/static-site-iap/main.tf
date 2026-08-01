@@ -268,11 +268,20 @@ resource "google_cloud_run_v2_service" "proxy" {
   }
 
   lifecycle {
-    # As imagens são publicadas pelo pipeline de build/push da própria infra
-    # (workflow reusável build-and-push), não pelo apply de Terraform de
-    # rotina — evita que um apply sem nova imagem reverta o rollout.
+    # Só a imagem do container `proxy` (índice 1 — o `oauth2-proxy` é
+    # sempre o índice 0, ver ordem dos blocos `containers` acima) é
+    # publicada pelo pipeline de build/push do core (workflow reusável
+    # build-and-push), não pelo apply de Terraform de rotina — por isso só
+    # ela é ignorada aqui. A imagem do oauth2-proxy é gerenciada 100% pelo
+    # Terraform (var.oauth2_proxy_image, pinada por tag) — ignorá-la também
+    # é um bug já cometido nesta revisão: `ignore_changes` por índice fixa
+    # o valor que já estava no state naquele índice, e como o índice 0
+    # pertencia ao container `proxy` antes desta revisão (v3, um único
+    # container), o primeiro apply real acabou aplicando a imagem ERRADA
+    # (a do `proxy`) ao container `oauth2-proxy` — os dois containers
+    # subiram com a mesma imagem e falharam ("Application exec likely
+    # failed" nos dois, confirmado via Cloud Logging).
     ignore_changes = [
-      template[0].containers[0].image,
       template[0].containers[1].image,
     ]
   }
