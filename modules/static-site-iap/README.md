@@ -1,24 +1,24 @@
 # static-site-iap
 
 Módulo Terraform genérico para publicar um site estático (ex: um dashboard
-Evidence.dev) atrás de um Load Balancer HTTPS externo protegido por
-Identity-Aware Proxy (IAP), com **publicação atômica via objeto-ponteiro no
-bucket**.
+Evidence.dev) direto num Cloud Run service protegido por **IAP nativo (sem
+Load Balancer nem domínio próprio)**, com **publicação atômica via
+objeto-ponteiro no bucket**.
 
 Não é específico de nenhuma vertical/core — qualquer core da CM Ventures que
 precise publicar um site estático com controle de acesso via login Google pode
 reutilizá-lo.
 
-## Arquitetura (revisão de 2026-08-01 — ADR-003, adendo)
+## Arquitetura (revisão de 2026-08-01 — CMV-346, "sem domínio próprio")
 
 ```
-cliente --HTTPS--> LB (IAP) --> backend_service --> Serverless NEG --> Cloud Run "proxy"
-                                                                              |
-                                                                     lê current-release
-                                                                     e serve releases/<versão>/...
-                                                                              |
-                                                                              v
-                                                                       bucket GCS (privado)
+cliente --HTTPS (*.run.app)--> IAP nativo do Cloud Run --> Cloud Run "proxy"
+                                                                   |
+                                                          lê current-release
+                                                          e serve releases/<versão>/...
+                                                                   |
+                                                                   v
+                                                            bucket GCS (privado)
 ```
 
 - **Bucket único**, privado (`public_access_prevention = "enforced"`). O job
@@ -28,47 +28,38 @@ cliente --HTTPS--> LB (IAP) --> backend_service --> Serverless NEG --> Cloud Run
 - **Cloud Run service "proxy"**: stateless, `min_instance_count = 0` (nenhum
   worker permanente), somente leitura do bucket via a própria service account
   (ADC), sem lógica de negócio. Lê o ponteiro e serve os arquivos da versão
-  apontada. Ingress restrito a `INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER` — a
-  URL `*.run.app` não serve o dashboard; só é alcançável pelo LB.
-- **Serverless NEG + `google_compute_backend_service`**: ao contrário de
-  `google_compute_backend_bucket`, este recurso **suporta o bloco `iap {}`
-  nativo** do provider Terraform — sem `null_resource`/`local-exec`.
-- **Load Balancer HTTPS externo**: IP global, certificado gerenciado, proxy
-  HTTPS e regra de encaminhamento — como antes.
+  apontada. `ingress = INGRESS_TRAFFIC_ALL` + `iap_enabled = true`: a URL
+  `*.run.app` é pública no sentido de rede, mas o IAP intercepta toda
+  requisição antes do container e exige login Google + autorização IAM.
+- **Sem Load Balancer, sem IP global, sem certificado gerenciado** — o
+  próprio Cloud Run já serve HTTPS na URL `*.run.app`.
 
 ### Por que essa revisão (histórico)
 
-A primeira versão deste módulo tentava aplicar IAP em
-`google_compute_backend_bucket`. Verificado via `terraform providers schema
--json` (providers `google`/`google-beta` v6.50.0) que esse recurso **não
-expõe** o bloco `iap {}` no Terraform (só existe na API REST, não coberta pelo
-provider) — só `google_compute_backend_service` tem esse bloco. A segunda
-versão contornava isso com blue/green de dois backend buckets + IAP habilitado
-via `null_resource`/`local-exec` chamando `gcloud`/`curl` diretamente na API.
+A v1 tentava aplicar IAP em `google_compute_backend_bucket` — recurso sem
+suporte a `iap {}` no provider Terraform. A v2 (CMV-259) passou para um Cloud
+Run "proxy" atrás de um Serverless NEG + `google_compute_backend_service`
+(que tem `iap {}` nativo) por trás de um Load Balancer HTTPS com certificado
+gerenciado para `cm-analytics-dashboard.cm-ventures.com`.
 
-O CTO decidiu (adendo ao ADR-003) trocar a arquitetura por completo: em vez de
-servir o bucket diretamente, um Cloud Run service proxy mínimo senta atrás de
-um Serverless NEG + `google_compute_backend_service`, que tem IAP nativo. Isso
-elimina o `null_resource` frágil **e** simplifica a publicação atômica: sai do
-nível "LB/url_map" e vira uma escrita de objeto único no bucket (ver seção
-abaixo), que é atômica por natureza no GCS.
+Esse domínio **não pertence à empresa** (registrado por terceiros, DNS na
+Netfirms) — o certificado gerenciado nunca saiu de `PROVISIONING` e o
+dashboard ficou inacessível (bug CMV-346). O board decidiu (2026-08-01) não
+usar domínio próprio por ora: esta v3 elimina o LB por completo e usa o IAP
+nativo do Cloud Run (GA, sem exigir domínio/certificado), servindo na URL
+`*.run.app`. Reduz custo fixo de serving a praticamente zero (elimina
+~US$18/mês de LB + IP + cert) e simplifica o módulo.
 
-## Pré-requisito manual obrigatório: OAuth brand do IAP
+## Pré-requisito: IAP habilitado no projeto
 
-O IAP exige um **OAuth consent screen ("brand") e um OAuth Client ID/Secret**
-associados ao projeto GCP. Isso **não é totalmente terraformável** — a criação
-da "brand" (tela de consentimento OAuth) exige permissão de administrador da
-organização/Workspace e, na prática, é feita manualmente uma única vez pelo
-console do GCP:
+Diferente da v2 (que exigia criar manualmente um OAuth Client ID/Secret e
+passá-los ao módulo), o IAP nativo do Cloud Run reaproveita a "brand"
+(OAuth consent screen) já configurada no projeto GCP — não recebe
+`client_id`/`client_secret` por recurso. Pré-requisitos:
 
-1. Console GCP → "APIs & Services" → "OAuth consent screen": configurar a
-   brand do projeto (nome, domínio, e-mail de suporte).
-2. Console GCP → "APIs & Services" → "Credentials" → "Create OAuth client ID"
-   (tipo "Web application"): gera o `client_id` e o `client_secret`.
-3. Esses dois valores são passados para este módulo como
-   `iap_oauth_client_id` / `iap_oauth_client_secret` (variáveis `sensitive`,
-   nunca commitar em `.tfvars` versionado — usar Secret Manager ou variável de
-   ambiente `TF_VAR_...` injetada pelo CI).
+1. API `iap.googleapis.com` habilitada no projeto.
+2. OAuth consent screen ("brand") já configurada (mesmo pré-requisito
+   manual da v2 — feito uma única vez, não muda com esta revisão).
 
 ## Pré-requisito: membros autorizados
 
@@ -113,11 +104,6 @@ Só a service account de runtime do job de publicação
 A service account do proxy (`google_service_account.proxy`, criada por este
 módulo) tem apenas `roles/storage.objectViewer` — nunca escreve.
 
-Diferente da versão blue/green anterior, a SA de runtime **não precisa de
-nenhuma permissão de rede/LB**: não existe mais custom role para flipar
-`url_map` — o Terraform gerencia o `url_map` por inteiro, normalmente, sem
-`lifecycle.ignore_changes`.
-
 ## O container do proxy
 
 `var.proxy_image` é a imagem do serviço Cloud Run proxy — stateless, somente
@@ -134,12 +120,15 @@ core (ex: `cm-analytics`), não gerenciada por este módulo — o
 `lifecycle.ignore_changes` no `google_cloud_run_v2_service.proxy` evita que um
 `terraform apply` de rotina reverta um rollout de imagem novo.
 
-## Nome do resource IAM do IAP
+## Nota de validação pendente (CMV-346)
 
-O recurso `google_iap_web_backend_service_iam_member`, usado neste módulo para
-conceder `roles/iap.httpsResourceAccessor` no backend service, aceita o
-argumento `web_backend_service = <nome do backend service>` no provider
-`google` padrão (sem exigir `google-beta`).
+O campo `iap_enabled` em `google_cloud_run_v2_service` e o recurso
+`google_iap_web_cloud_run_service_iam_member` foram escritos com base na
+documentação pública do IAP nativo em Cloud Run — **confirmar contra um
+`terraform plan` real** (ou `terraform providers schema -json`) antes do
+primeiro apply desta revisão, do mesmo jeito que a v1→v2 foi validada. Se o
+provider fixado em `versions.tf` não expuser esses recursos, ajustar a
+version constraint antes de prosseguir.
 
 ## Variáveis principais
 
@@ -148,7 +137,6 @@ argumento `web_backend_service = <nome do backend service>` no provider
 | `name` | Nome base do site (prefixo de todos os recursos) |
 | `project_id` | Projeto GCP |
 | `region` | Região do bucket e do Cloud Run proxy |
-| `iap_oauth_client_id` / `iap_oauth_client_secret` | Credenciais OAuth do IAP (ver pré-requisito manual acima) |
 | `iap_authorized_members` | Lista de identidades IAM autorizadas (`user:...`, `group:...`) |
 | `runtime_service_account_email` | SA do job de publicação (write no bucket) |
 | `proxy_image` | Imagem do serviço Cloud Run proxy |
@@ -157,6 +145,5 @@ argumento `web_backend_service = <nome do backend service>` no provider
 
 ## Outputs principais
 
-`bucket_name`, `pointer_object_name`, `backend_service_name`,
-`proxy_service_name`, `proxy_service_account_email`, `url_map_name`,
-`load_balancer_ip`.
+`bucket_name`, `pointer_object_name`, `proxy_service_name`,
+`proxy_service_account_email`, `dashboard_url` (URL `*.run.app` do dashboard).

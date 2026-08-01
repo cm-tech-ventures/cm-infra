@@ -1,19 +1,20 @@
-# Módulo genérico de publicação de site estático atrás de um Load Balancer HTTPS
-# com IAP, usando publicação atômica a NÍVEL DE OBJETO NO BUCKET (não mais
-# blue/green a nível de Load Balancer — ver ADR-003, adendo de 2026-08-01).
+# Módulo genérico de publicação de site estático via Cloud Run + IAP DIRETO
+# (sem Load Balancer/domínio próprio — decisão do board de 2026-08-01, CMV-346).
 #
 # Este módulo é agnóstico de vertical: qualquer core com um dashboard estático
 # (ex: Evidence.dev) pode reutilizá-lo.
 #
-# Histórico: a primeira versão deste módulo tentava IAP nativo em
-# `google_compute_backend_bucket`, que não existe no provider Terraform (só
-# existe o campo REST, não coberto). A segunda tentativa (blue/green de
-# backend buckets) contornava isso só para o IAP via null_resource/local-exec.
-# O CTO decidiu (adendo ADR-003) trocar a arquitetura: em vez de servir o
-# bucket diretamente via backend bucket, um serviço Cloud Run "proxy" mínimo,
-# sem estado e com `min_instance_count = 0`, lê o bucket e serve o conteúdo.
-# Esse proxy senta atrás de um Serverless NEG + `google_compute_backend_service`,
-# que SUPORTA o bloco `iap {}` nativo — elimina o `null_resource`/local-exec.
+# Histórico: a v1 tentava IAP em `google_compute_backend_bucket` (sem suporte
+# no provider). A v2 (CMV-259) passou para um Cloud Run "proxy" atrás de LB +
+# `google_compute_backend_service` (que tem `iap {}` nativo) — mas isso exigia
+# um domínio próprio para o certificado gerenciado, e o domínio configurado
+# (`cm-analytics-dashboard.cm-ventures.com`) não pertence à empresa: o
+# certificado nunca saiu de PROVISIONING e o dashboard ficou inacessível
+# (bug CMV-346). O board decidiu não usar domínio próprio por ora: esta v3
+# serve o proxy Cloud Run diretamente na URL `*.run.app` (HTTPS automático do
+# próprio Cloud Run) com IAP habilitado nativamente no serviço — GCP suporta
+# IAP em Cloud Run sem LB. Elimina o LB, a forwarding rule, o IP global e o
+# certificado gerenciado por completo (~US$18/mês).
 #
 # ---------------------------------------------------------------------------
 # Bucket único — publicação atômica por objeto-ponteiro
@@ -34,7 +35,7 @@ resource "google_storage_bucket" "site" {
 
   # Sem acesso público: nenhum membro "allUsers"/"allAuthenticatedUsers" é
   # concedido em nenhum lugar deste módulo. O único caminho de leitura é via
-  # o serviço proxy (que só é alcançável através do LB + IAP).
+  # o serviço proxy (protegido por IAP).
   public_access_prevention = "enforced"
 
   versioning {
@@ -66,16 +67,26 @@ resource "google_storage_bucket_iam_member" "proxy_reader" {
 # ---------------------------------------------------------------------------
 # Cloud Run service proxy: stateless, somente leitura do bucket, sem lógica de
 # negócio. `min_instance_count = 0` preserva o princípio de nenhum worker
-# permanente. Ingress restrito a "internal-and-cloud-load-balancing": a URL
-# "*.run.app" não serve o dashboard — só é alcançável via o LB (e, portanto,
-# via IAP). Nenhum binding de invoker é concedido a "allUsers": a única forma
-# de invocar é o próprio LB, permitido implicitamente pelo Serverless NEG.
+# permanente. Ingress "all" é necessário para o IAP nativo do Cloud Run
+# interceptar as requisições antes do container (não há mais LB na frente);
+# o IAP é quem garante que só usuários autenticados/autorizados chegam ao
+# proxy — a URL pública `*.run.app` nunca fica de fato aberta.
 # ---------------------------------------------------------------------------
 resource "google_cloud_run_v2_service" "proxy" {
   project  = var.project_id
   name     = "${var.name}-site-proxy"
   location = var.region
-  ingress  = "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
+  ingress  = "INGRESS_TRAFFIC_ALL"
+
+  # IAP nativo do Cloud Run (sem LB), disponível no provider google >= 6.14
+  # como campo `iap_enabled` do serviço (ver
+  # https://cloud.google.com/iap/docs/enabling-cloud-run). PENDENTE DE
+  # VALIDAÇÃO contra a versão do provider fixada em versions.tf antes do
+  # primeiro apply desta revisão — se a versão travada não expuser o campo,
+  # atualizar o `required_providers` (não há workaround de outro recurso
+  # Terraform conhecido; documentar no README caso um `terraform plan` real
+  # rejeite o atributo).
+  iap_enabled = true
 
   template {
     service_account = google_service_account.proxy.email
@@ -108,106 +119,23 @@ resource "google_cloud_run_v2_service" "proxy" {
   }
 }
 
-# ---------------------------------------------------------------------------
-# Serverless NEG — aponta o backend do LB para o Cloud Run service proxy.
-# ---------------------------------------------------------------------------
-resource "google_compute_region_network_endpoint_group" "proxy" {
-  project               = var.project_id
-  name                  = "${var.name}-site-proxy-neg"
-  region                = var.region
-  network_endpoint_type = "SERVERLESS"
-
-  cloud_run {
-    service = google_cloud_run_v2_service.proxy.name
-  }
-}
-
-# ---------------------------------------------------------------------------
-# Backend service — ao contrário de google_compute_backend_bucket, este
-# recurso SUPORTA o bloco `iap {}` nativo do provider Terraform. Elimina o
-# null_resource/local-exec da versão anterior deste módulo.
-# ---------------------------------------------------------------------------
-resource "google_compute_backend_service" "site" {
-  project               = var.project_id
-  name                  = "${var.name}-site-backend"
-  load_balancing_scheme = "EXTERNAL_MANAGED"
-  protocol              = "HTTPS"
-
-  backend {
-    group = google_compute_region_network_endpoint_group.proxy.id
-  }
-
-  iap {
-    enabled              = true
-    oauth2_client_id     = var.iap_oauth_client_id
-    oauth2_client_secret = var.iap_oauth_client_secret
-  }
-}
-
-# IAM do IAP: concede a cada membro autorizado o papel para passar pelo IAP e
-# chegar ao backend service. A lista deve conter só quem tem direito de ver o
-# dashboard (ex: board + dono do MD) — nunca conceder no nível do projeto inteiro.
-resource "google_iap_web_backend_service_iam_member" "authorized_members" {
+# IAM do IAP nativo do Cloud Run: concede a cada membro autorizado o papel
+# para passar pelo IAP e chegar ao serviço. A lista deve conter só quem tem
+# direito de ver o dashboard (ex: board + dono do MD) — nunca "allUsers".
+resource "google_iap_web_cloud_run_service_iam_member" "authorized_members" {
   for_each = toset(var.iap_authorized_members)
 
-  project             = var.project_id
-  web_backend_service = google_compute_backend_service.site.name
-  role                = "roles/iap.httpsResourceAccessor"
-  member              = each.value
-}
-
-# ---------------------------------------------------------------------------
-# url_map — aponta direto para o backend service único. Sem blue/green a
-# nível de LB: a publicação atômica agora vive inteiramente no objeto-ponteiro
-# do bucket (ver comentário no topo do arquivo), então não há mais necessidade
-# de o job flipar nada no Compute API — o Terraform gerencia o url_map por
-# inteiro, normalmente.
-# ---------------------------------------------------------------------------
-resource "google_compute_url_map" "site" {
-  project         = var.project_id
-  name            = "${var.name}-url-map"
-  default_service = google_compute_backend_service.site.id
-}
-
-# ---------------------------------------------------------------------------
-# Load Balancer HTTPS externo padrão: IP global + cert gerenciado + proxy + regra.
-# ---------------------------------------------------------------------------
-resource "google_compute_global_address" "site" {
-  project      = var.project_id
-  name         = "${var.name}-lb-ip"
-  address_type = "EXTERNAL"
-}
-
-resource "google_compute_managed_ssl_certificate" "site" {
-  project = var.project_id
-  name    = "${var.name}-ssl-cert"
-
-  managed {
-    domains = ["${var.name}.cm-ventures.com"]
-  }
-}
-
-resource "google_compute_target_https_proxy" "site" {
-  project          = var.project_id
-  name             = "${var.name}-https-proxy"
-  url_map          = google_compute_url_map.site.id
-  ssl_certificates = [google_compute_managed_ssl_certificate.site.id]
-}
-
-resource "google_compute_global_forwarding_rule" "site" {
-  project               = var.project_id
-  name                  = "${var.name}-fwd-rule"
-  target                = google_compute_target_https_proxy.site.id
-  port_range            = "443"
-  ip_address            = google_compute_global_address.site.address
-  load_balancing_scheme = "EXTERNAL_MANAGED"
+  project           = var.project_id
+  location          = google_cloud_run_v2_service.proxy.location
+  cloud_run_service = google_cloud_run_v2_service.proxy.name
+  role              = "roles/iap.httpsResourceAccessor"
+  member            = each.value
 }
 
 # ---------------------------------------------------------------------------
 # A SA de runtime do job de publicação (dlt->dbt->Evidence) escreve as builds
 # versionadas e o objeto-ponteiro. Só write no bucket — ela nunca precisa
-# tocar em recursos de rede/LB (ao contrário da versão blue/green anterior,
-# que exigia um custom role para flipar o url_map).
+# tocar em recursos de rede/LB (que não existem mais nesta arquitetura).
 # ---------------------------------------------------------------------------
 resource "google_storage_bucket_iam_member" "publisher_writer" {
   bucket = google_storage_bucket.site.name

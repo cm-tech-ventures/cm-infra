@@ -8,13 +8,8 @@ output "pointer_object_name" {
   value       = var.pointer_object_name
 }
 
-output "backend_service_name" {
-  description = "Nome do google_compute_backend_service (com IAP nativo habilitado) que expõe o proxy Cloud Run."
-  value       = google_compute_backend_service.site.name
-}
-
 output "proxy_service_name" {
-  description = "Nome do Cloud Run service proxy (somente leitura do bucket, ingress restrito ao LB)."
+  description = "Nome do Cloud Run service proxy (IAP nativo habilitado, único ponto de acesso ao dashboard)."
   value       = google_cloud_run_v2_service.proxy.name
 }
 
@@ -23,12 +18,7 @@ output "proxy_service_account_email" {
   value       = google_service_account.proxy.email
 }
 
-output "url_map_name" {
-  description = "Nome do google_compute_url_map. Gerenciado inteiramente pelo Terraform — não há mais flip fora de banda (a publicação atômica agora vive no objeto-ponteiro do bucket)."
-  value       = google_compute_url_map.site.name
-}
-
-output "load_balancer_ip" {
-  description = "Endereço IP externo global do Load Balancer (aponte o DNS do dashboard para este IP)."
-  value       = google_compute_global_address.site.address
+output "dashboard_url" {
+  description = "URL pública (*.run.app) do dashboard, atrás do IAP nativo do Cloud Run. Sem domínio próprio — HTTPS automático do próprio Cloud Run."
+  value       = google_cloud_run_v2_service.proxy.uri
 }
