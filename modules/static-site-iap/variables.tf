@@ -1,5 +1,5 @@
 variable "name" {
-  description = "Nome base do site estático (kebab-case). Usado como prefixo dos buckets, backends e recursos de rede."
+  description = "Nome base do site estático (kebab-case). Usado como prefixo do bucket, proxy, backend e recursos de rede."
   type        = string
 
   validation {
@@ -14,7 +14,7 @@ variable "project_id" {
 }
 
 variable "region" {
-  description = "Região usada para o Cloud Storage dos buckets do site. O Load Balancer em si é global."
+  description = "Região usada para o bucket, o serviço proxy (Cloud Run) e o Serverless NEG. O Load Balancer em si é global."
   type        = string
 }
 
@@ -63,25 +63,38 @@ variable "iap_authorized_members" {
 
 variable "runtime_service_account_email" {
   description = <<-EOT
-    E-mail da service account de runtime que publica o site (escreve os arquivos
-    estáticos nos buckets e flipa o url_map após uma build bem-sucedida). Tipicamente
-    o output service_account_email do módulo cloud-run-job do pipeline de publicação.
+    E-mail da service account de runtime do job de publicação (dlt->dbt->Evidence).
+    Escreve as builds versionadas ("releases/<versão>/...") e o objeto-ponteiro no
+    bucket. Tipicamente o output service_account_email do módulo cloud-run-job do
+    pipeline de publicação. Não precisa de nenhuma permissão de rede/LB — só write
+    no bucket.
   EOT
   type        = string
 }
 
-variable "active_color" {
+variable "proxy_image" {
   description = <<-EOT
-    Cor ativa no momento do apply inicial do Terraform ("blue" ou "green"). Após o
-    primeiro apply, o Terraform NUNCA mais altera qual cor está ativa — isso é feito
-    pelo próprio job de publicação via chamada à Compute API (urlMaps.patch /
-    setDefaultService), de forma atômica, fora do Terraform. Ver README.md.
+    Imagem de container do serviço proxy (Cloud Run) que lê o objeto-ponteiro do
+    bucket e serve os arquivos de "releases/<versão>/..." correspondentes.
+    Stateless, somente leitura, sem lógica de negócio — publicada pelo workflow
+    reusável build-and-push do próprio repositório do core (ex: cm-analytics).
   EOT
   type        = string
-  default     = "blue"
+}
 
-  validation {
-    condition     = contains(["blue", "green"], var.active_color)
-    error_message = "active_color deve ser 'blue' ou 'green'."
-  }
+variable "proxy_max_instances" {
+  description = "Máximo de instâncias do Cloud Run service proxy (min_instance_count é sempre 0 — nenhum worker permanente)."
+  type        = number
+  default     = 3
+}
+
+variable "pointer_object_name" {
+  description = <<-EOT
+    Nome do objeto-ponteiro no bucket cujo conteúdo é a versão ("releases/<versão>/")
+    atualmente publicada. O job de publicação só sobrescreve este objeto depois que
+    dlt+dbt (testes + freshness) passarem; o proxy lê este objeto a cada request (ou
+    com cache curto) para decidir qual versão servir.
+  EOT
+  type        = string
+  default     = "current-release"
 }
