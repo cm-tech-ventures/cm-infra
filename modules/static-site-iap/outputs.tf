@@ -9,7 +9,7 @@ output "pointer_object_name" {
 }
 
 output "proxy_service_name" {
-  description = "Nome do Cloud Run service proxy (IAP nativo habilitado, único ponto de acesso ao dashboard)."
+  description = "Nome do Cloud Run service (sidecar oauth2-proxy + proxy leitor do bucket), único ponto de acesso ao dashboard."
   value       = google_cloud_run_v2_service.proxy.name
 }
 
@@ -19,6 +19,6 @@ output "proxy_service_account_email" {
 }
 
 output "dashboard_url" {
-  description = "URL pública (*.run.app) do dashboard, atrás do IAP nativo do Cloud Run. Sem domínio próprio — HTTPS automático do próprio Cloud Run."
+  description = "URL pública (*.run.app) do dashboard, atrás do oauth2-proxy (login Google + allowlist de e-mails). Sem domínio próprio — HTTPS automático do próprio Cloud Run."
   value       = google_cloud_run_v2_service.proxy.uri
 }

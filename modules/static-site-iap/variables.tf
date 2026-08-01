@@ -18,31 +18,73 @@ variable "region" {
   type        = string
 }
 
-variable "iap_authorized_members" {
+variable "oauth2_proxy_image" {
   description = <<-EOT
-    Lista de identidades IAM autorizadas a acessar o site via IAP, cada uma no
-    formato aceito por `member` do IAM ('user:pessoa@dominio.com' ou
-    'group:nome-do-grupo@googlegroups.com'). Deve conter exatamente quem tem
-    direito de visualizar o dashboard (ex: board + dono do MD).
-
-    Contas GCP sem organização/Workspace não têm domínio para um Google Group
-    gerenciado — nesse caso, use `user:` diretamente para cada pessoa. Se no
-    futuro existir um Workspace, prefira um único `group:...@googlegroups.com`
-    ou grupo de domínio para não precisar tocar Terraform a cada troca de membro.
+    Imagem de container do oauth2-proxy (sidecar de ingress/autenticação).
+    Deve ser fixada por tag de versão específica (idealmente com digest) —
+    nunca "latest". Ex: "quay.io/oauth2-proxy/oauth2-proxy:v7.6.0".
   EOT
-  type        = list(string)
+  type        = string
 
   validation {
-    condition     = length(var.iap_authorized_members) > 0
-    error_message = "iap_authorized_members não pode ser vazio."
+    condition     = !endswith(var.oauth2_proxy_image, ":latest") && can(regex(":", var.oauth2_proxy_image))
+    error_message = "oauth2_proxy_image deve ser fixada por tag/digest específico, nunca ':latest' ou sem tag."
   }
+}
+
+variable "oauth2_proxy_port" {
+  description = "Porta pública (ingress) em que o oauth2-proxy escuta. Deve casar com $PORT injetado pelo Cloud Run."
+  type        = number
+  default     = 8080
+}
+
+variable "proxy_internal_port" {
+  description = "Porta interna (localhost) em que o container `proxy` (leitor do bucket) escuta, sem exposição no ingress."
+  type        = number
+  default     = 8081
+}
+
+variable "oauth2_proxy_redirect_url" {
+  description = <<-EOT
+    URL de callback OAuth do oauth2-proxy (ex: "https://<nome-serviço>-<hash>.<região>.run.app/oauth2/callback").
+    Precisa ser configurada como redirect URI autorizada no OAuth client (ação manual no console GCP).
+  EOT
+  type        = string
+}
+
+variable "oauth2_proxy_cookie_expire" {
+  description = "Expiração do cookie de sessão do oauth2-proxy. Nunca deve exceder 24h."
+  type        = string
+  default     = "12h"
 
   validation {
-    condition = alltrue([
-      for m in var.iap_authorized_members : can(regex("^(user|group|serviceAccount|domain):.+", m))
-    ])
-    error_message = "cada membro deve estar no formato 'user:...', 'group:...', 'serviceAccount:...' ou 'domain:...'."
+    condition     = can(regex("^([0-9]+h|[0-9]+m)$", var.oauth2_proxy_cookie_expire))
+    error_message = "oauth2_proxy_cookie_expire deve estar em formato de duração Go (ex: '12h', '90m')."
   }
+}
+
+variable "oauth_client_id_secret_id" {
+  description = "ID do secret (Secret Manager) com o client_id do OAuth client (Google) usado pelo oauth2-proxy."
+  type        = string
+}
+
+variable "oauth_client_secret_secret_id" {
+  description = "ID do secret (Secret Manager) com o client_secret do OAuth client (Google) usado pelo oauth2-proxy."
+  type        = string
+}
+
+variable "cookie_secret_id" {
+  description = "ID do secret (Secret Manager) com o cookie_secret do oauth2-proxy (32 bytes aleatórios, base64)."
+  type        = string
+}
+
+variable "allowed_emails_secret_id" {
+  description = <<-EOT
+    ID do secret (Secret Manager) com a allowlist de e-mails autorizados a acessar
+    o dashboard (um e-mail por linha) — consumido via --authenticated-emails-file
+    do oauth2-proxy. Nunca hardcoded no Terraform.
+  EOT
+  type        = string
 }
 
 variable "runtime_service_account_email" {
