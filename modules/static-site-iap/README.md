@@ -139,19 +139,38 @@ concede `roles/run.invoker` a ele via `google_cloud_run_v2_service_iam_member`.
 **Nunca** conceder `roles/run.invoker` a `allUsers` — o único caminho de
 invocação deve passar pelo IAP.
 
-## Nota de validação pendente (CMV-346)
+## Aprendizado operacional: 403 mesmo com IAM/annotation corretos (CMV-346)
 
-O campo `iap_enabled` em `google_cloud_run_v2_service`, o recurso
-`google_iap_web_cloud_run_service_iam_member` e o binding de
-`roles/run.invoker` para o service agent do IAP foram escritos com base na
-documentação pública do IAP nativo em Cloud Run — **confirmar contra um
-`terraform plan`/`apply` real** antes de considerar a revisão fechada, do
-mesmo jeito que a v1→v2 foi validada. Sem `terraform` disponível no ambiente
-deste agente, esta revisão não pôde rodar `terraform validate`/`plan`
-localmente — confirmar sintaxe e comportamento no primeiro apply (condição 2
-da revisão do CTO). Após o apply, validar que uma requisição anônima à URL
-`*.run.app` recebe redirect de login/403 e que um usuário fora de
-`iap_authorized_members` recebe 403 (condição 3).
+`terraform apply` desta revisão foi validado contra o projeto real
+(schema de `iap_enabled`, `cloud_run_service_name` e o binding de
+`run.invoker` — ver histórico de commits). Mesmo assim, o primeiro apply
+produziu 403 permanente para todos os membros autorizados, com IAM policy,
+annotation `run.googleapis.com/iap-enabled=true`, ingress e API todos
+corretos. O Data Access audit log (`iap.webServiceVersions.accessViaIAP`,
+precisa estar habilitado explicitamente — não vem ligado por padrão)
+revelou a causa: cada avaliação chegava com
+`resourceName: projects//locations/.../services/...` — **projeto vazio no
+caminho do recurso avaliado**, nunca batendo com a IAM policy real (que
+vive em `projects/{PROJECT_NUMBER}/iap_web/...`). Ou seja, o próprio
+enforcement do IAP ficou com contexto de autorização malformado, apesar de
+toda a configuração declarada (Terraform, annotation, IAM) estar correta —
+`terraform apply`/`plan` não têm visibilidade sobre esse estado interno do
+IAP, só o audit log expõe.
+
+**Correção que resolveu**: um ciclo de desabilitar/reabilitar IAP fora do
+Terraform (`gcloud run services update <serviço> --region=<região> --no-iap`
+seguido de `--iap`) força o GCP a reconstruir o contexto de autorização do
+zero. A IAM policy do IAP (`gcloud iap web get-iam-policy`) não é afetada
+pelo toggle — sobrevive intacta. Depois do toggle o `terraform plan` não
+mostra diff (a annotation volta ao mesmo estado declarado), então é seguro
+rodar como remediação pontual sem gerar drift permanente.
+
+**Se um novo core que usa este módulo apresentar 403 persistente mesmo com
+tudo correto no `terraform plan`**: (1) habilitar Data Access audit logs
+para `iap.googleapis.com` no projeto (não é automático); (2) checar o
+`resourceName` nas negações — se o projeto vier vazio, aplicar o toggle
+disable/enable acima antes de suspeitar de cache/propagação ou de erro de
+configuração declarada.
 
 ## Variáveis principais
 
