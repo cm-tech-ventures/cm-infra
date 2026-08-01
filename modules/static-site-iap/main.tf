@@ -150,6 +150,11 @@ resource "google_cloud_run_v2_service" "proxy" {
         container_port = var.oauth2_proxy_port
       }
 
+      # `command` explícito: sem ele, o Cloud Run (multi-container/sidecar)
+      # não resolve o ENTRYPOINT da imagem e tenta executar o primeiro item
+      # de `args` como binário (falha: "error finding executable
+      # '--provider=google' in PATH"). Confirmado em apply real (CMV-346).
+      command = ["/bin/oauth2-proxy"]
       args = [
         "--provider=google",
         "--http-address=0.0.0.0:${var.oauth2_proxy_port}",
