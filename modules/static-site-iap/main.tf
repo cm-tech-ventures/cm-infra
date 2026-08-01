@@ -1,20 +1,48 @@
-# Módulo genérico de publicação de site estático via Cloud Run + IAP DIRETO
+# Módulo genérico de publicação de site estático via Cloud Run + oauth2-proxy
 # (sem Load Balancer/domínio próprio — decisão do board de 2026-08-01, CMV-346).
 #
 # Este módulo é agnóstico de vertical: qualquer core com um dashboard estático
 # (ex: Evidence.dev) pode reutilizá-lo.
 #
-# Histórico: a v1 tentava IAP em `google_compute_backend_bucket` (sem suporte
-# no provider). A v2 (CMV-259) passou para um Cloud Run "proxy" atrás de LB +
-# `google_compute_backend_service` (que tem `iap {}` nativo) — mas isso exigia
-# um domínio próprio para o certificado gerenciado, e o domínio configurado
-# (`cm-analytics-dashboard.cm-ventures.com`) não pertence à empresa: o
-# certificado nunca saiu de PROVISIONING e o dashboard ficou inacessível
-# (bug CMV-346). O board decidiu não usar domínio próprio por ora: esta v3
-# serve o proxy Cloud Run diretamente na URL `*.run.app` (HTTPS automático do
-# próprio Cloud Run) com IAP habilitado nativamente no serviço — GCP suporta
-# IAP em Cloud Run sem LB. Elimina o LB, a forwarding rule, o IP global e o
-# certificado gerenciado por completo (~US$18/mês).
+# Histórico:
+# - v1 tentava IAP em `google_compute_backend_bucket` (sem suporte no provider).
+# - v2 (CMV-259) passou para um Cloud Run "proxy" atrás de LB +
+#   `google_compute_backend_service` (que tem `iap {}` nativo) — mas isso exigia
+#   um domínio próprio para o certificado gerenciado, e o domínio configurado
+#   (`cm-analytics-dashboard.cm-ventures.com`) não pertence à empresa: o
+#   certificado nunca saiu de PROVISIONING e o dashboard ficou inacessível.
+# - v3 (CMV-346, 1ª revisão) serviu o proxy Cloud Run direto na URL `*.run.app`
+#   com IAP NATIVO do Cloud Run (sem LB). Abandonada: bug confirmado da
+#   plataforma GCP (audit log mostra `resourceName: projects//locations/...`
+#   — projeto vazio no contexto de avaliação do IAP, negando 100% mesmo com
+#   IAM policy correta; reproduzido em 13:03 e 13:05 UTC de 2026-08-01, mesmo
+#   após toggle oficial `--no-iap`/`--iap` às 12:56 UTC). Ver seção "Por que
+#   não IAP nativo" abaixo antes de reverter.
+# - v4 (CMV-346, 2ª revisão, atual): autenticação via **oauth2-proxy** como
+#   sidecar no mesmo Cloud Run service, na frente do proxy de leitura do
+#   bucket. Elimina o LB, a forwarding rule, o IP global e o certificado
+#   gerenciado por completo (~US$18/mês), e evita o bug do IAP nativo.
+#
+# ---------------------------------------------------------------------------
+# Por que não IAP nativo (evidência do bug, para avaliar reversão futura)
+# ---------------------------------------------------------------------------
+# O IAP nativo em Cloud Run negava todos os usuários autorizados mesmo com a
+# IAM policy correta (`roles/iap.httpsResourceAccessor` para os e-mails
+# esperados, confirmado via `gcloud iap web get-iam-policy` e via REST direto,
+# sem cache). Os Data Access audit logs de `iap.googleapis.com` mostraram cada
+# avaliação de `iap.webServiceVersions.accessViaIAP` contra
+# `resourceName: projects//locations/southamerica-east1/services/...`
+# (projeto vazio) — nunca poderia haver match contra a policy real, que vive em
+# `projects/857737530765/iap_web/cloud_run-southamerica-east1/...`. O toggle
+# oficial (`gcloud run services update --no-iap` seguido de `--iap`) não
+# corrigiu o contexto interno (mesmo etag da policy, mesma negação nas
+# tentativas subsequentes de 13:03 e 13:05 UTC). Avaliação do board: bug da
+# integração nativa IAP↔Cloud Run, provavelmente relacionado a projeto GCP sem
+# organização/Workspace. Se o Google corrigir esse bug no futuro, a volta ao
+# IAP nativo é barata: reverter este módulo para o commit anterior a esta
+# revisão (remove o sidecar oauth2-proxy, os secrets de cookie/allowlist e o
+# `allUsers` invoker; re-adiciona `iap_enabled`, o IAM do IAP e o invoker do
+# service agent do IAP).
 #
 # ---------------------------------------------------------------------------
 # Bucket único — publicação atômica por objeto-ponteiro
@@ -35,7 +63,7 @@ resource "google_storage_bucket" "site" {
 
   # Sem acesso público: nenhum membro "allUsers"/"allAuthenticatedUsers" é
   # concedido em nenhum lugar deste módulo. O único caminho de leitura é via
-  # o serviço proxy (protegido por IAP).
+  # o serviço proxy (protegido pelo oauth2-proxy).
   public_access_prevention = "enforced"
 
   versioning {
@@ -64,26 +92,44 @@ resource "google_storage_bucket_iam_member" "proxy_reader" {
   member = "serviceAccount:${google_service_account.proxy.email}"
 }
 
+# A SA de runtime do serviço (usada pelos dois containers, incluindo o
+# oauth2-proxy) precisa ler os 4 secrets referenciados via value_source no
+# container oauth2-proxy abaixo (client id/secret/cookie/allowlist).
+resource "google_secret_manager_secret_iam_member" "proxy_secret_accessor" {
+  for_each = toset([
+    var.oauth_client_id_secret_id,
+    var.oauth_client_secret_secret_id,
+    var.cookie_secret_id,
+    var.allowed_emails_secret_id,
+  ])
+
+  project   = var.project_id
+  secret_id = each.value
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.proxy.email}"
+}
+
 # ---------------------------------------------------------------------------
-# Cloud Run service proxy: stateless, somente leitura do bucket, sem lógica de
-# negócio. `min_instance_count = 0` preserva o princípio de nenhum worker
-# permanente. Ingress "all" é necessário para o IAP nativo do Cloud Run
-# interceptar as requisições antes do container (não há mais LB na frente);
-# o IAP é quem garante que só usuários autenticados/autorizados chegam ao
-# proxy — a URL pública `*.run.app` nunca fica de fato aberta.
+# Cloud Run service: dois containers no mesmo serviço (sidecar).
+#
+# - `oauth2-proxy` é o *ingress container* (recebe o tráfego público, porta
+#   exposta) — faz login Google, valida contra a allowlist de e-mails e só
+#   então repassa a requisição para o upstream local.
+# - `proxy` (leitor do bucket) não tem porta exposta no ingress: só recebe
+#   tráfego do oauth2-proxy via `localhost`, nunca diretamente da internet.
+#
+# `min_instance_count = 0` preserva o princípio de nenhum worker permanente.
+# Ingress "all" é necessário porque não há mais LB na frente — a autenticação
+# passa a ser 100% na camada de aplicação (oauth2-proxy), não mais na borda do
+# GCP. Por isso o invoker do serviço é `allUsers` (ver bloco de IAM abaixo):
+# toda requisição chega ao oauth2-proxy, mas nenhuma chega ao conteúdo estático
+# sem sessão Google válida + e-mail na allowlist.
 # ---------------------------------------------------------------------------
 resource "google_cloud_run_v2_service" "proxy" {
-  provider = google-beta
   project  = var.project_id
   name     = "${var.name}-site-proxy"
   location = var.region
   ingress  = "INGRESS_TRAFFIC_ALL"
-
-  # IAP nativo do Cloud Run (sem LB): `iap_enabled` só existe no schema do
-  # provider google-beta (confirmado via `terraform providers schema` num
-  # plan real na CMV-346 — o provider "google" padrão não expõe o campo,
-  # mesmo travado em >= 6.14). Precisa do `provider = google-beta` acima.
-  iap_enabled = true
 
   template {
     service_account = google_service_account.proxy.email
@@ -93,7 +139,87 @@ resource "google_cloud_run_v2_service" "proxy" {
       max_instance_count = var.proxy_max_instances
     }
 
+    # Container de ingress: oauth2-proxy. Recebe o tráfego público na porta
+    # $PORT injetada pelo Cloud Run e faz proxy reverso para o upstream local
+    # (container `proxy`, porta interna fixa `var.proxy_internal_port`).
     containers {
+      name  = "oauth2-proxy"
+      image = var.oauth2_proxy_image
+
+      ports {
+        container_port = var.oauth2_proxy_port
+      }
+
+      args = [
+        "--provider=google",
+        "--http-address=0.0.0.0:${var.oauth2_proxy_port}",
+        "--upstream=http://localhost:${var.proxy_internal_port}",
+        "--redirect-url=${var.oauth2_proxy_redirect_url}",
+        "--email-domain=*",
+        "--cookie-secure=true",
+        "--cookie-expire=${var.oauth2_proxy_cookie_expire}",
+      ]
+
+      env {
+        name = "OAUTH2_PROXY_CLIENT_ID"
+        value_source {
+          secret_key_ref {
+            secret  = var.oauth_client_id_secret_id
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "OAUTH2_PROXY_CLIENT_SECRET"
+        value_source {
+          secret_key_ref {
+            secret  = var.oauth_client_secret_secret_id
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "OAUTH2_PROXY_COOKIE_SECRET"
+        value_source {
+          secret_key_ref {
+            secret  = var.cookie_secret_id
+            version = "latest"
+          }
+        }
+      }
+
+      # Allowlist de e-mails montada via volume de secret — nunca hardcoded
+      # no Terraform. O oauth2-proxy lê o arquivo referenciado por
+      # --authenticated-emails-file.
+      volume_mounts {
+        name       = "allowed-emails"
+        mount_path = "/etc/oauth2-proxy"
+      }
+
+      env {
+        name  = "OAUTH2_PROXY_AUTHENTICATED_EMAILS_FILE"
+        value = "/etc/oauth2-proxy/allowed-emails"
+      }
+    }
+
+    volumes {
+      name = "allowed-emails"
+      secret {
+        secret = var.allowed_emails_secret_id
+        items {
+          version = "latest"
+          path    = "allowed-emails"
+        }
+      }
+    }
+
+    # Container upstream: lê o objeto-ponteiro do bucket e serve os arquivos
+    # de "releases/<versão>/..." correspondentes. SEM porta pública — só o
+    # oauth2-proxy acima fala com ele, via localhost.
+    containers {
+      name  = "proxy"
       image = var.proxy_image
 
       env {
@@ -105,53 +231,39 @@ resource "google_cloud_run_v2_service" "proxy" {
         name  = "POINTER_OBJECT_NAME"
         value = var.pointer_object_name
       }
+
+      env {
+        name  = "PORT"
+        value = tostring(var.proxy_internal_port)
+      }
     }
   }
 
   lifecycle {
-    # A imagem do proxy é publicada pelo pipeline de build/push da própria
-    # infra (workflow reusável build-and-push), não pelo apply de Terraform
-    # de rotina — evita que um apply sem nova imagem reverta o rollout.
-    ignore_changes = [template[0].containers[0].image]
+    # As imagens são publicadas pelo pipeline de build/push da própria infra
+    # (workflow reusável build-and-push), não pelo apply de Terraform de
+    # rotina — evita que um apply sem nova imagem reverta o rollout.
+    ignore_changes = [
+      template[0].containers[0].image,
+      template[0].containers[1].image,
+    ]
   }
 }
 
-# IAM do IAP nativo do Cloud Run: concede a cada membro autorizado o papel
-# para passar pelo IAP e chegar ao serviço. A lista deve conter só quem tem
-# direito de ver o dashboard (ex: board + dono do MD) — nunca "allUsers".
-resource "google_iap_web_cloud_run_service_iam_member" "authorized_members" {
-  for_each = toset(var.iap_authorized_members)
-
-  project                = var.project_id
-  location               = google_cloud_run_v2_service.proxy.location
-  cloud_run_service_name = google_cloud_run_v2_service.proxy.name
-  role                   = "roles/iap.httpsResourceAccessor"
-  member                 = each.value
-}
-
 # ---------------------------------------------------------------------------
-# Service agent do IAP -> roles/run.invoker no serviço proxy.
-#
-# IAP autentica/autoriza o usuário (bloco acima), mas quem de fato invoca o
-# Cloud Run por trás do IAP é o próprio service agent do IAP
-# (`service-{PROJECT_NUMBER}@gcp-sa-iap.iam.gserviceaccount.com`). Sem
-# roles/run.invoker para esse agent, o IAP autentica corretamente e o Cloud
-# Run ainda assim devolve 403 (revisão do CTO na CMV-346, condição 1).
-# `google_project_service_identity` (provider google-beta) obtém esse e-mail
-# sem precisar do número do projeto como input explícito.
+# Sem IAP: a autenticação é 100% do oauth2-proxy. Por isso o invoker do
+# serviço precisa ser `allUsers` — é o oauth2-proxy quem decide quem passa,
+# não o IAM do Cloud Run. Mudança de postura de segurança consciente,
+# aprovada pelo CTO na CMV-346 (2ª revisão): a superfície exposta é o próprio
+# oauth2-proxy (tela de login), sem caminho para o conteúdo estático sem
+# sessão válida + e-mail na allowlist.
 # ---------------------------------------------------------------------------
-resource "google_project_service_identity" "iap" {
-  provider = google-beta
-  project  = var.project_id
-  service  = "iap.googleapis.com"
-}
-
-resource "google_cloud_run_v2_service_iam_member" "iap_invoker" {
+resource "google_cloud_run_v2_service_iam_member" "public_invoker" {
   project  = var.project_id
   location = google_cloud_run_v2_service.proxy.location
   name     = google_cloud_run_v2_service.proxy.name
   role     = "roles/run.invoker"
-  member   = "serviceAccount:${google_project_service_identity.iap.email}"
+  member   = "allUsers"
 }
 
 # ---------------------------------------------------------------------------
