@@ -1,4 +1,4 @@
-# Workflow chamador do próprio cm-infra (ADR-003). Usa o reutilizável local
+# Workflow chamador do próprio cm-infra (ADR-004). Usa o reutilizável local
 # via `./` porque o reutilizável mora neste mesmo repo — não pode ter o
 # mesmo nome de arquivo que `peer-review.yml`.
 name: peer-review
