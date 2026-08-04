@@ -24,6 +24,7 @@ e quem é responsável por manter o keep-alive (CMV-53) cobrindo-o.
 |----------------|-------------------------|--------------------------------------|------------------------|-------|
 | cores (CM Ventures) | (ver `cm-ventures-core` / Secret Manager) | `cm.tech.ventures@gmail.com`         | OK — nasceu corporativo | — |
 | `backend-md` (md-hom) | `jwyjqiezwjccnxrbmlai` | **conta pessoal do Carlos** (a migrar) | ⏳ pendente de transferência de org para `ti.meusdredinhos@gmail.com` | [CMV-54](/CMV/issues/CMV-54) |
+| `sys-bjj-backend` (bjj-system) | `aoriyfujsilisrrvadxy` | conta da vertical BJJ | OK — DSN incluído no keep-alive em 2026-07-29 | [CMV-297](/CMV/issues/CMV-297) |
 
 > Atualize a linha do `backend-md` assim que a transferência de organização for
 > confirmada pelo board: trocar "conta pessoal do Carlos" por

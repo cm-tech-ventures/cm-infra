@@ -40,10 +40,54 @@ limites do free-tier (storage, banda, etc).
 3. Nenhuma mudança de Terraform é necessária — o job lê o secret em runtime.
 4. Registrar a posse do projeto Supabase em `docs/supabase-projects.md`.
 
-Hoje a lista cobre apenas o banco dos cores (`cm-ventures-core`, projeto
+Hoje a lista cobre o banco dos cores (`cm-ventures-core`, projeto
 Supabase único para cm-identity/cm-crm/etc — mesmo host, schemas
-diferentes). O banco do `backend-md` (md-hom) entra assim que a transferência
+diferentes) e o banco do `sys-bjj-backend` (projeto `bjj-system`, DSN lido do
+secret `sys-bjj-backend-database-url` desse projeto e adicionado em
+2026-07-29 — [CMV-297](/CMV/issues/CMV-297), 3º incidente de pausa por
+free-tier). O banco do `backend-md` (md-hom) entra assim que a transferência
 de organização em [CMV-54](/CMV/issues/CMV-54) for concluída.
+
+### Cuidado: connection string direta (`db.<ref>.supabase.co`) some do DNS durante a pausa
+
+Ao adicionar o DSN do `sys-bjj-backend` (CMV-297), a execução manual de
+verificação falhou com erro de resolução de nome (`Name or service not
+known` / `NXDOMAIN`, confirmado até contra `8.8.8.8` diretamente) para o
+host `db.aoriyfujsilisrrvadxy.supabase.co` — o formato de conexão direta que
+o serviço usa. Isso é esperado enquanto o projeto Supabase segue pausado (no
+momento deste commit o board ainda estava restaurando o projeto no
+dashboard): o registro DNS do host de conexão direta some por completo
+enquanto o projeto está pausado, então o keep-alive não consegue nem
+resolver o host até o board concluir a restauração manual — o próprio
+keep-alive não tem como "acordar" um projeto nesse estado.
+
+Depois que o board confirmar a restauração, rodar de novo o passo de
+"Teste de falha" abaixo (execução manual) para confirmar `succeeded` cobrindo
+os 3 bancos.
+
+Recomendação para reduzir a fragilidade desse tipo de incidente: assim que o
+projeto do sys-bjj estabilizar, considerar trocar o `DATABASE_URL` do
+`sys-bjj-backend` (e o DSN aqui no keep-alive) do formato de conexão direta
+para o do connection pooler Supabase (Supavisor, host
+`aws-*.pooler.supabase.com`, mesmo padrão já usado pelo banco dos cores) —
+não elimina o problema de pausa em si, mas evita depender de um registro DNS
+que desaparece por completo enquanto o projeto está pausado.
+
+## Checklist: todo banco novo entra no keep-alive no dia em que nasce
+
+Sempre que um core ou vertical ganhar um banco Supabase novo (novo projeto
+Supabase, não só um schema novo em banco já coberto), antes de considerar o
+serviço pronto para uso real:
+
+1. Seguir os passos de "Adicionar um novo banco à lista" acima.
+2. Confirmar execução verde do job `keepalive-check` cobrindo o novo DSN.
+3. Registrar o projeto em `docs/supabase-projects.md` (posse + issue de
+   referência).
+
+Isso é responsabilidade do Platform Engineer no momento em que o serviço
+nasce — não deixar para o 1º incidente de pausa por free-tier descobrir que
+o banco ficou de fora (este é o 3º: [CMV-50](/CMV/issues/CMV-50)/[CMV-55](/CMV/issues/CMV-55),
+[CMV-297](/CMV/issues/CMV-297)).
 
 ## Publicar uma nova imagem do job
 
