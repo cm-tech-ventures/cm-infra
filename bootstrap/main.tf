@@ -194,6 +194,7 @@ resource "google_project_iam_member" "ops_observer_roles" {
     "roles/run.viewer",
     "roles/monitoring.viewer",
     "roles/logging.viewer",
+    "roles/cloudscheduler.viewer",
   ])
   project = var.project_id
   role    = each.value
