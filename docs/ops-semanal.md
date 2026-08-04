@@ -119,6 +119,15 @@ Via API Paperclip (`GET /api/companies/{companyId}/issues`):
 - Andamento da Fase 3.5 (issues do board sob o parentId correspondente) e do
   goal G2.
 
+## Deduplicação de achados (obrigatório antes de abrir issue)
+
+Antes de criar qualquer issue a partir de uma anomalia, seguir o protocolo
+em [`dedup-achados-rotinas.md`](./dedup-achados-rotinas.md): buscar issue
+existente por um identificador estável do achado (nome do serviço, id do
+recurso — nunca a frase descritiva), comentar na issue aberta se já existir,
+e só abrir issue nova se a busca não retornar nada relacionado. Toda issue
+nova deve usar um identificador estável no título.
+
 ## Formato do relatório (obrigatório)
 
 Comentário em pt-BR na issue **CMV-320**:
@@ -126,9 +135,10 @@ Comentário em pt-BR na issue **CMV-320**:
   "investigar Y").
 - **1 linha "ok"** por área quando não há anomalia — nunca uma parede de
   status verde detalhado.
-- Anomalias que exigem ação viram **issues próprias**, linkadas no
-  comentário (ex.: `Anomalia → CMV-XXX`). A rotina nunca corrige nada
-  diretamente no GCP, GitHub ou Paperclip.
+- Anomalias que exigem ação viram **issues próprias** (após checar
+  deduplicação, ver seção acima), linkadas no comentário (ex.:
+  `Anomalia → CMV-XXX`). A rotina nunca corrige nada diretamente no GCP,
+  GitHub ou Paperclip.
 
 Exemplo de estrutura:
 
