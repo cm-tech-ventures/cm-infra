@@ -45,11 +45,41 @@ estrita de "somente list/describe/read" até a impersonation ser corrigida.
 Para cada repo — `cm-analytics`, `cm-crm`, `cm-identity`, `cm-infra`:
 
 ```
+gh workflow list --repo cm-tech-ventures/<repo> --json name,path
 gh run list --repo cm-tech-ventures/<repo> --limit 1 --json status,conclusion,createdAt,workflowName
 ```
 
-Anomalia se: último run `conclusion != success` (quebrado), OU está
+**Antes de avaliar saúde**: excluir da leitura todo workflow cujo único
+gatilho é `on: workflow_call` (reusable workflow puro — `django-ci.yml`,
+`build-and-push.yml`, `deploy-cloud-run.yml` em `cm-infra`). Esses workflows
+não podem rodar sozinhos; um run direto deles falha por construção e **não é
+sinal de saúde de CI**. Confirmar o gatilho lendo o YAML
+(`gh api repos/cm-tech-ventures/<repo>/contents/.github/workflows/<file>`)
+antes de contar o run como anomalia. A saúde de um workflow reusable é medida
+pelos runs dos **repos consumidores** que o chamam (ex.: saúde de
+`deploy-cloud-run.yml` = runs de `deploy` em `cm-crm`, `cm-analytics`,
+`cm-mcp`), nunca pelos runs diretos no repo que o hospeda.
+
+Para workflows recorrentes/agendados (ex.: `e2e`), olhar as últimas
+execuções em `main`, não só a última:
+
+```
+gh run list --repo cm-tech-ventures/<repo> --workflow=<workflow>.yml \
+  --branch main --limit 10 --json status,conclusion,createdAt
+```
+
+Anomalia se: último run direto (de um workflow que **não** é
+`workflow_call`-only) tem `conclusion != success`, OU está
 `in_progress`/vermelho há mais de 24h.
+
+**Anomalia de primeira classe — workflow vermelho recorrente**: se um
+workflow agendado/recorrente (ex.: `e2e`, `nightly`) está vermelho em
+`main` por **2 ou mais execuções consecutivas**, isso é uma anomalia
+prioritária, não uma nota de rodapé — prioridade proporcional ao tempo em
+vermelho (2 execuções consecutivas → `medium`; 3+ ou ≥3 dias seguidos →
+`high`; ≥5 dias seguidos → `urgent`). Um pipeline de teste cego por dias
+significa merges e deploys acontecendo sem cobertura, o que é mais grave que
+um único run vermelho isolado.
 
 ### 2. BI/pipeline (cm-analytics)
 

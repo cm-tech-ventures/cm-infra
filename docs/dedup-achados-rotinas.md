@@ -50,3 +50,26 @@ novas rotinas):
 - Checagem de aprovação de templates WhatsApp (Twilio Content API).
 - Qualquer rotina futura de checagem/monitoramento que crie issues a partir
   de estado externo (GCP, Twilio, Meta, etc.).
+
+## Escopo ampliado (CMV-387, board 2026-08-04): classificação, não só duplicação
+
+A revisão de backlog de 2026-08-04 mostrou dois outros erros de
+classificação na rotina de ops semanal, mais caros que a duplicação
+original — não são sobre "abrir issue de novo", são sobre "abrir a issue
+errada com a prioridade errada":
+
+- **Falso positivo por não entender workflow reusable** (CMV-322, cancelada):
+  a rotina tratou runs diretos de workflows `on: workflow_call`-only
+  (`deploy-cloud-run.yml`, `build-and-push.yml` em `cm-infra`) como CI
+  quebrado, quando esses workflows não podem rodar sozinhos por construção.
+- **Quebra real não priorizada** (CMV-323, aberta como `medium`): o `e2e` do
+  cm-crm ficou vermelho em `main` por 4 dias seguidos (01–04/08) e não virou
+  anomalia de prioridade correspondente, enquanto um `high` foi gasto no
+  falso positivo acima.
+
+Correção versionada em [`ops-semanal.md`](./ops-semanal.md), seção "1.
+CI/CD": workflows `workflow_call`-only são excluídos da leitura de saúde de
+CI (medida pelos repos consumidores, não pelo repo que hospeda o reusable);
+workflow recorrente vermelho por ≥2 execuções consecutivas vira anomalia de
+primeira classe com prioridade proporcional ao tempo em vermelho.
+  de estado externo (GCP, Twilio, Meta, etc.).
