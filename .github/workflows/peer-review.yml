@@ -1,0 +1,121 @@
+# Reusable: gate de peer-review por status check (ADR-003, CMV-405).
+#
+# Fica vermelho quando o diff do PR toca path sensível e ainda não há o
+# label `peer-reviewed`; verde caso contrário ou após o label ser aplicado
+# (reavaliado automaticamente pelo evento `labeled`/`unlabeled`).
+#
+# Uso no repo chamador (~10 linhas), em `.github/workflows/peer-review.yml`:
+#
+#   name: peer-review
+#   on:
+#     pull_request:
+#       types: [opened, synchronize, reopened, labeled, unlabeled]
+#   permissions:
+#     contents: read
+#     pull-requests: read
+#   jobs:
+#     peer-review:
+#       uses: cm-tech-ventures/cm-infra/.github/workflows/peer-review.yml@main
+#       # extra-sensitive-paths (opcional): estende a lista default, nunca reduz.
+#       # with:
+#       #   extra-sensitive-paths: |
+#       #     **/billing/**
+name: peer-review
+
+on:
+  workflow_call:
+    inputs:
+      extra-sensitive-paths:
+        description: >
+          Paths sensíveis adicionais (um glob por linha), somados à lista
+          default. Nunca usado para reduzir a lista default (ADR-003).
+        type: string
+        default: ""
+      label:
+        description: Label que marca o PR como já revisado pelo par.
+        type: string
+        default: "peer-reviewed"
+
+jobs:
+  peer-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Avalia paths sensíveis x label de revisão
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          EXTRA_PATHS: ${{ inputs.extra-sensitive-paths }}
+          REVIEW_LABEL: ${{ inputs.label }}
+        run: |
+          set -euo pipefail
+
+          # Paths sensíveis default (ADR-003) — cada repo pode estender via
+          # extra-sensitive-paths, nunca reduzir sem novo ADR.
+          DEFAULT_PATTERNS='
+          **/migrations/**
+          **/schema*
+          **/*.sql
+          **/auth/**
+          **/security/**
+          **/*token*
+          **/*permission*
+          **/*scope*
+          .github/**
+          **/openapi*
+          **/*.openapi.*
+          contracts/**
+          api/**
+          Dockerfile*
+          docker-compose*
+          **/deploy/**
+          fly.toml
+          render.yaml
+          **/webhooks/**
+          **/events/**
+          '
+
+          PATTERNS="$(printf '%s\n%s\n' "$DEFAULT_PATTERNS" "$EXTRA_PATHS" | sed '/^\s*$/d')"
+
+          CHANGED_FILES="$(gh api "repos/${REPO}/pulls/${PR_NUMBER}/files" --paginate --jq '.[].filename')"
+
+          echo "Arquivos alterados no PR:"
+          echo "$CHANGED_FILES"
+          echo
+          echo "Paths sensíveis avaliados:"
+          echo "$PATTERNS"
+
+          TOUCHED_SENSITIVE=""
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            while IFS= read -r pattern; do
+              [ -z "$pattern" ] && continue
+              case "$file" in
+                $pattern)
+                  TOUCHED_SENSITIVE="$file (casou com '$pattern')"
+                  ;;
+              esac
+              [ -n "$TOUCHED_SENSITIVE" ] && break
+            done <<< "$PATTERNS"
+            [ -n "$TOUCHED_SENSITIVE" ] && break
+          done <<< "$CHANGED_FILES"
+
+          if [ -z "$TOUCHED_SENSITIVE" ]; then
+            echo "::notice::Diff não toca path sensível — check verde."
+            exit 0
+          fi
+
+          echo "Path sensível tocado: $TOUCHED_SENSITIVE"
+
+          HAS_LABEL="$(gh api "repos/${REPO}/issues/${PR_NUMBER}/labels" --jq '.[].name' | grep -Fxq "$REVIEW_LABEL" && echo yes || echo no)"
+
+          if [ "$HAS_LABEL" = "yes" ]; then
+            echo "::notice::Diff toca path sensível, mas já tem o label '${REVIEW_LABEL}' — check verde."
+            exit 0
+          fi
+
+          echo "::error::Diff toca path sensível ($TOUCHED_SENSITIVE) e o PR ainda não tem o label '${REVIEW_LABEL}'. Faça handoff para o agente par via menção estruturada [@Par](agent://<id>) na issue Paperclip; o par roda /code-review, comenta os achados no PR e aplica o label. O check reavalia sozinho no evento 'labeled'."
+          exit 1
