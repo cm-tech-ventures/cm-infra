@@ -1,8 +1,12 @@
-# Reusable: gate de peer-review por status check (ADR-003, CMV-405).
+# Reusable: gate de peer-review por status check (ADR-004, CMV-399/CMV-400).
 #
 # Fica vermelho quando o diff do PR toca path sensível e ainda não há o
 # label `peer-reviewed`; verde caso contrário ou após o label ser aplicado
 # (reavaliado automaticamente pelo evento `labeled`/`unlabeled`).
+#
+# Lista de paths sensíveis e matriz de pares: ver ADR-004
+# (docs/adr/ADR-004-politica-revisao-diff.md, §2.2-2.4). Onde este workflow
+# divergir do ADR, o ADR vence — atualize aqui para convergir.
 #
 # Uso no repo chamador (~10 linhas), em `.github/workflows/peer-review.yml`:
 #
@@ -28,7 +32,7 @@ on:
       extra-sensitive-paths:
         description: >
           Paths sensíveis adicionais (um glob por linha), somados à lista
-          default. Nunca usado para reduzir a lista default (ADR-003).
+          default. Nunca usado para reduzir a lista default (ADR-004).
         type: string
         default: ""
       label:
@@ -53,29 +57,19 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Paths sensíveis default (ADR-003) — cada repo pode estender via
-          # extra-sensitive-paths, nunca reduzir sem novo ADR.
+          # Paths sensíveis default (ADR-004 §2.4) — cada repo pode estender
+          # via extra-sensitive-paths, nunca reduzir sem novo ADR.
           DEFAULT_PATTERNS='
+          **/schema.yml
+          **/openapi*.yml
+          docs/api/**
           **/migrations/**
-          **/schema*
-          **/*.sql
-          **/auth/**
-          **/security/**
-          **/*token*
-          **/*permission*
-          **/*scope*
-          .github/**
-          **/openapi*
-          **/*.openapi.*
-          contracts/**
-          api/**
-          Dockerfile*
-          docker-compose*
-          **/deploy/**
-          fly.toml
-          render.yaml
-          **/webhooks/**
-          **/events/**
+          service/**
+          .github/workflows/**
+          infra/**
+          cm-sdk/**
+          config/settings*
+          **/AGENTS.md
           '
 
           PATTERNS="$(printf '%s\n%s\n' "$DEFAULT_PATTERNS" "$EXTRA_PATHS" | sed '/^\s*$/d')"
@@ -93,8 +87,19 @@ jobs:
             [ -z "$file" ] && continue
             while IFS= read -r pattern; do
               [ -z "$pattern" ] && continue
+              # O `case` do shell não trata `**` como globstar recursivo: um
+              # padrão `**/algo` exige literalmente um `/` antes de "algo" e
+              # não casa arquivos na raiz do repo (CMV-410). Para padrões
+              # prefixados com `**/`, testamos também a variante sem o
+              # prefixo, cobrindo o caso de raiz.
+              root_variant="$pattern"
+              case "$pattern" in
+                '**/'*)
+                  root_variant="${pattern#\*\*/}"
+                  ;;
+              esac
               case "$file" in
-                $pattern)
+                $pattern|$root_variant)
                   TOUCHED_SENSITIVE="$file (casou com '$pattern')"
                   ;;
               esac
