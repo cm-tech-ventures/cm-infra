@@ -56,6 +56,11 @@ resource "google_cloud_run_v2_service" "service" {
           cpu    = var.cpu
           memory = var.memory
         }
+        # CPU extra durante o boot do container (sem custo de instância parada
+        # a mais — só acelera o cold start). Mitigação para min_instances=0
+        # (CMV-395: 500 recorrente no cm-crm correlacionado 100% com cold
+        # start; boost reduz a janela de risco, não elimina).
+        startup_cpu_boost = true
       }
 
       dynamic "env" {
