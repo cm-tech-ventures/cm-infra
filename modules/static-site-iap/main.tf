@@ -165,6 +165,12 @@ resource "google_cloud_run_v2_service" "proxy" {
       # escopo mudar isso sem aprovação de gasto), só reduz a janela de risco.
       resources {
         startup_cpu_boost = true
+        # Preserva explicitamente o default atual do Cloud Run (CPU alocada
+        # só durante o processamento de request). Sem isso, declarar este
+        # bloco só com startup_cpu_boost faz o Terraform tratar cpu_idle
+        # como não-configurado e removê-lo do desired state (visto no plan
+        # de CMV-396: "cpu_idle = true -> null").
+        cpu_idle = true
       }
 
       # Startup probe explícito: o default do Cloud Run (multi-container) é
@@ -282,6 +288,8 @@ resource "google_cloud_run_v2_service" "proxy" {
       # se beneficiar do boost.
       resources {
         startup_cpu_boost = true
+        # Ver comentário equivalente no container oauth2-proxy acima.
+        cpu_idle = true
       }
     }
   }
