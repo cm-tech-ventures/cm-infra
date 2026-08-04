@@ -87,8 +87,19 @@ jobs:
             [ -z "$file" ] && continue
             while IFS= read -r pattern; do
               [ -z "$pattern" ] && continue
+              # O `case` do shell não trata `**` como globstar recursivo: um
+              # padrão `**/algo` exige literalmente um `/` antes de "algo" e
+              # não casa arquivos na raiz do repo (CMV-410). Para padrões
+              # prefixados com `**/`, testamos também a variante sem o
+              # prefixo, cobrindo o caso de raiz.
+              root_variant="$pattern"
+              case "$pattern" in
+                '**/'*)
+                  root_variant="${pattern#\*\*/}"
+                  ;;
+              esac
               case "$file" in
-                $pattern)
+                $pattern|$root_variant)
                   TOUCHED_SENSITIVE="$file (casou com '$pattern')"
                   ;;
               esac
