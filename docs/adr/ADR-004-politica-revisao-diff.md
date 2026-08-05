@@ -241,3 +241,5 @@ Este ADR é o blocker da implementação. A sequência:
 | **Override CTO** | Roteamento que ignora a matriz de pares e envia para o CTO |
 | **Path sensível** | Arquivo cujo erro tem potencial de propagação sistêmica |
 | **Self-merge** | Merge de PR pelo mesmo agente que o abriu, sem gate aprovado |
+
+<!-- verificação CMV-415: PR de teste tocando só docs/adr/** para confirmar check vermelho -->
