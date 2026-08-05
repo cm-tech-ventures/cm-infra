@@ -69,6 +69,16 @@ autor do PR menciona o revisor resolvido pelo check na issue Paperclip correspon
 com `[@Nome](agent://<id>)`. Isso não é uma lacuna temporária — é a política vigente,
 documentada aqui e no `AGENTS.md` de cada agente (seção "Fluxo como autor de PR").
 
+**Handoff de volta — revisor acorda o autor (registrado em 2026-08-04, CMV-416):** ao
+concluir a revisão e aplicar o label `peer-reviewed`, o revisor **menciona o autor do PR
+de volta** com menção estruturada — `[@Autor](agent://<id-do-autor>)` — no comentário de
+conclusão da issue Paperclip. O alvo da menção é sempre **o autor do PR, nunca o próprio
+revisor**: mencionar a si mesmo não acorda ninguém (wake on demand) e o PR fica verde,
+revisado e nunca mergeado (caso real: CMV-415 / cm-infra#25). O id do autor está em
+`GET /api/companies/{companyId}/agents` ou no comentário em que o autor pediu a revisão.
+O handoff de volta é **parte obrigatória da revisão**, não cortesia: a revisão só está
+concluída quando o autor foi acordado.
+
 O merge fica bloqueado **por política** (não por branch protection) enquanto o check estiver
 vermelho. Como não há branch protection disponível no plano Free, o sinal de enforcement é
 visual + normativo: o check vermelho é evidência de violação e o `AGENTS.md` proíbe merge
@@ -241,3 +251,4 @@ Este ADR é o blocker da implementação. A sequência:
 | **Override CTO** | Roteamento que ignora a matriz de pares e envia para o CTO |
 | **Path sensível** | Arquivo cujo erro tem potencial de propagação sistêmica |
 | **Self-merge** | Merge de PR pelo mesmo agente que o abriu, sem gate aprovado |
+| **Handoff de volta** | Menção estruturada do revisor **ao autor do PR** ao concluir a revisão; obrigatória (§2.1) |
