@@ -156,6 +156,23 @@ resource "google_cloud_run_v2_service" "proxy" {
         container_port = var.oauth2_proxy_port
       }
 
+      # CPU extra durante o boot do container (sem custo de instância parada
+      # a mais — só acelera o cold start). Mitigação para min_instance_count
+      # = 0: CMV-395 (cm-crm, módulo cloud-run-service) achou correlação de
+      # 100% entre 5xx e boot de instância nova; CMV-396 confirmou o mesmo
+      # padrão aqui (rajadas de 502/503 do dashboard coincidindo com o
+      # intervalo de deploys/cold start). Não elimina scale-to-zero (fora de
+      # escopo mudar isso sem aprovação de gasto), só reduz a janela de risco.
+      resources {
+        startup_cpu_boost = true
+        # Preserva explicitamente o default atual do Cloud Run (CPU alocada
+        # só durante o processamento de request). Sem isso, declarar este
+        # bloco só com startup_cpu_boost faz o Terraform tratar cpu_idle
+        # como não-configurado e removê-lo do desired state (visto no plan
+        # de CMV-396: "cpu_idle = true -> null").
+        cpu_idle = true
+      }
+
       # Startup probe explícito: o default do Cloud Run (multi-container) é
       # agressivo demais para o oauth2-proxy, que faz uma chamada de rede
       # (OIDC discovery do provider Google) antes de abrir a porta — o probe
@@ -263,6 +280,16 @@ resource "google_cloud_run_v2_service" "proxy" {
       env {
         name  = "PORT"
         value = tostring(var.proxy_internal_port)
+      }
+
+      # Mesma mitigação de cold start do container oauth2-proxy acima
+      # (CMV-396) — este container também inicializa um client GCS
+      # (google.cloud.storage) no import, que é CPU-bound o suficiente para
+      # se beneficiar do boost.
+      resources {
+        startup_cpu_boost = true
+        # Ver comentário equivalente no container oauth2-proxy acima.
+        cpu_idle = true
       }
     }
   }
