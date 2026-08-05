@@ -217,7 +217,7 @@ em casos de conflito ou incidente.
 
 Este ADR é o blocker da implementação. A sequência:
 
-1. **PlatformEngineer** implementa o workflow `.github/workflows/diff-review.yml` em todos
+1. **PlatformEngineer** implementa o workflow `.github/workflows/peer-review.yml` em todos
    os repos em escopo, lendo este ADR como especificação. (CMV-398 desbloqueada após merge deste ADR)
 2. O workflow deve:
    - Detectar paths modificados via a API de arquivos do PR.
