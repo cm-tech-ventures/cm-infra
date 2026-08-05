@@ -51,10 +51,23 @@ decidiu introduzir revisão obrigatória de diff como gate no fluxo de desenvolv
 O gate é implementado como um **GitHub Actions workflow** disparado em `pull_request`. Ele:
 
 1. Inspeciona os paths modificados no PR.
-2. Determina o revisor par conforme a Seção 2.2.
-3. Acorda o revisor via Paperclip API com o prompt de `/code-review`.
-4. Publica o resultado como **status check** (`reviewer-gate`) no commit do PR.
-5. O status check falha (vermelho) se houver achado bloqueante; passa (verde) caso contrário.
+2. Determina o revisor par conforme a Seção 2.2, a partir do label `author:<Agente>`
+   aplicado pelo autor do PR (o GitHub Actions não sabe qual agente autorou o PR, já
+   que todos operam sob a mesma conta `cadusds2` — §1.1).
+3. Publica o resultado como **status check** (`peer-review`) no commit do PR, com o
+   revisor par já resolvido na mensagem de erro quando o check falha.
+4. O status check falha (vermelho) se o diff tocar path sensível sem o label
+   `peer-reviewed`; passa (verde) caso contrário.
+
+**Wake do revisor (decisão registrada em 2026-08-04, CMV-413):** o workflow **não**
+chama a API do Paperclip para acordar o revisor automaticamente. Avaliado e descartado
+por ora: exigiria plumbing de um secret de API do Paperclip acessível a todos os
+workflows/repos em escopo, o que é uma decisão de infra/segurança (credencial
+compartilhada entre agentes) que requer aprovação do board antes de ser implementada.
+Até essa decisão ser tomada, o mecanismo oficial de wake é o **fallback manual**: o
+autor do PR menciona o revisor resolvido pelo check na issue Paperclip correspondente
+com `[@Nome](agent://<id>)`. Isso não é uma lacuna temporária — é a política vigente,
+documentada aqui e no `AGENTS.md` de cada agente (seção "Fluxo como autor de PR").
 
 O merge fica bloqueado **por política** (não por branch protection) enquanto o check estiver
 vermelho. Como não há branch protection disponível no plano Free, o sinal de enforcement é
@@ -207,10 +220,12 @@ Este ADR é o blocker da implementação. A sequência:
 1. **PlatformEngineer** implementa o workflow `.github/workflows/diff-review.yml` em todos
    os repos em escopo, lendo este ADR como especificação. (CMV-398 desbloqueada após merge deste ADR)
 2. O workflow deve:
-   - Detectar paths modificados via `git diff --name-only`.
-   - Aplicar o override de roteamento da Seção 2.3 antes da matriz de pares.
-   - Acordar o revisor via Paperclip API com o PR number e diff como contexto.
-   - Publicar o status check `reviewer-gate` com o resultado.
+   - Detectar paths modificados via a API de arquivos do PR.
+   - Resolver o autor pelo label `author:<Agente>` e aplicar o override de roteamento
+     da Seção 2.3 antes da matriz de pares (§2.2).
+   - Publicar o status check `peer-review` com o resultado e o revisor resolvido.
+   - Wake do revisor: fallback manual (menção estruturada pelo autor), conforme §2.1 —
+     não há chamada à Paperclip API embutida no workflow.
 3. **CTO** revisa o PR do workflow antes do merge (PlatformEngineer → CTO, conforme matriz).
 
 ---

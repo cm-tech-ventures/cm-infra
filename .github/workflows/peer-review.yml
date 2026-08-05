@@ -1,4 +1,4 @@
-# Reusable: gate de peer-review por status check (ADR-004, CMV-399/CMV-400).
+# Reusable: gate de peer-review por status check (ADR-004, CMV-399/CMV-400/CMV-413).
 #
 # Fica vermelho quando o diff do PR toca path sensível e ainda não há o
 # label `peer-reviewed`; verde caso contrário ou após o label ser aplicado
@@ -7,6 +7,23 @@
 # Lista de paths sensíveis e matriz de pares: ver ADR-004
 # (docs/adr/ADR-004-politica-revisao-diff.md, §2.2-2.4). Onde este workflow
 # divergir do ADR, o ADR vence — atualize aqui para convergir.
+#
+# Resolução do revisor (CMV-413): o GitHub Actions não sabe qual agente
+# autorou o PR (todos os agentes commitam sob a mesma conta `cadusds2` —
+# ADR-004 §1.1). Por isso o autor deve aplicar o label `author:<Agente>`
+# (ex.: `author:PlatformEngineer`) ao abrir o PR; o workflow lê esse label,
+# resolve o par pela matriz do ADR-004 §2.2 e aplica o override do CTO
+# (§2.3) quando o diff toca path de contrato/SDK. Sem o label `author:*`,
+# a mensagem cai num fallback genérico pedindo para o autor identificar o
+# par manualmente.
+#
+# Wake do revisor (CMV-413, decisão consciente registrada em ADR-004 §2.1):
+# este workflow NÃO chama a API do Paperclip para acordar o revisor.
+# Fazer isso exigiria plumbing de um secret de API do Paperclip
+# compartilhado entre workflows/repos — decisão de infra/segurança que
+# requer aprovação do board, fora do escopo deste fix. O mecanismo oficial
+# é o fallback manual: o autor menciona o revisor resolvido abaixo na
+# issue Paperclip com `[@Nome](agent://<id>)`.
 #
 # Uso no repo chamador (~10 linhas), em `.github/workflows/peer-review.yml`:
 #
@@ -115,12 +132,55 @@ jobs:
 
           echo "Path sensível tocado: $TOUCHED_SENSITIVE"
 
-          HAS_LABEL="$(gh api "repos/${REPO}/issues/${PR_NUMBER}/labels" --jq '.[].name' | grep -Fxq "$REVIEW_LABEL" && echo yes || echo no)"
+          LABELS="$(gh api "repos/${REPO}/issues/${PR_NUMBER}/labels" --jq '.[].name')"
 
-          if [ "$HAS_LABEL" = "yes" ]; then
+          if echo "$LABELS" | grep -Fxq "$REVIEW_LABEL"; then
             echo "::notice::Diff toca path sensível, mas já tem o label '${REVIEW_LABEL}' — check verde."
             exit 0
           fi
 
-          echo "::error::Diff toca path sensível ($TOUCHED_SENSITIVE) e o PR ainda não tem o label '${REVIEW_LABEL}'. Faça handoff para o agente par via menção estruturada [@Par](agent://<id>) na issue Paperclip; o par roda /code-review, comenta os achados no PR e aplica o label. O check reavalia sozinho no evento 'labeled'."
+          # Resolve o revisor par (ADR-004 §2.2-2.3, CMV-413). Sem a
+          # identidade do autor (label author:<Agente>) não dá pra aplicar
+          # a matriz — cai no fallback genérico.
+          AUTHOR="$(echo "$LABELS" | sed -n 's/^author:\(.*\)$/\1/p' | head -n1)"
+
+          # Override do CTO (§2.3): contrato OpenAPI, docs/api e cm-sdk
+          # sempre vão para o CTO, independentemente da matriz de pares.
+          CTO_OVERRIDE=no
+          while IFS= read -r f; do
+            case "$f" in
+              *schema.yml|*openapi*.yml|docs/api/*|cm-sdk/*) CTO_OVERRIDE=yes ;;
+            esac
+          done <<< "$CHANGED_FILES"
+
+          # Matriz de pares (ADR-004 §2.2) — nome -> agent id (Paperclip).
+          resolve_reviewer() {
+            case "$1" in
+              BackendCore) echo "IntegrationsEngineer 8f9026cd-ab66-4ca0-a6f7-1ca6bb000de8" ;;
+              IntegrationsEngineer) echo "BackendCore 710887d8-2631-4246-aa83-e8fb6db4d8e7" ;;
+              VerticalMD) echo "VerticalBJJ d7c47ceb-39ce-4b87-a07b-aaf153a491d4" ;;
+              VerticalBJJ) echo "VerticalMD bdfda58a-8693-4e25-96cd-c9378c0b105b" ;;
+              DataEngineer) echo "BackendCore 710887d8-2631-4246-aa83-e8fb6db4d8e7" ;;
+              PlatformEngineer) echo "CTO a892a163-cc2b-4ade-a761-7117501c3b48" ;;
+              CTO) echo "PlatformEngineer 7e1e257b-012c-4865-b41c-4b36ebd776ca" ;;
+              CEO) echo "CTO a892a163-cc2b-4ade-a761-7117501c3b48" ;;
+              *) echo "" ;;
+            esac
+          }
+
+          if [ "$CTO_OVERRIDE" = "yes" ]; then
+            REVIEWER="CTO a892a163-cc2b-4ade-a761-7117501c3b48"
+          elif [ -n "$AUTHOR" ]; then
+            REVIEWER="$(resolve_reviewer "$AUTHOR")"
+          else
+            REVIEWER=""
+          fi
+
+          if [ -n "$REVIEWER" ]; then
+            REVIEWER_NAME="$(echo "$REVIEWER" | cut -d' ' -f1)"
+            REVIEWER_ID="$(echo "$REVIEWER" | cut -d' ' -f2)"
+            echo "::error::Diff toca path sensível ($TOUCHED_SENSITIVE) e o PR ainda não tem o label '${REVIEW_LABEL}'. Revisor par (ADR-004): ${REVIEWER_NAME}. Faça handoff via menção estruturada [@${REVIEWER_NAME}](agent://${REVIEWER_ID}) na issue Paperclip; o par roda /code-review, comenta os achados no PR e aplica o label. O check reavalia sozinho no evento 'labeled'."
+          else
+            echo "::error::Diff toca path sensível ($TOUCHED_SENSITIVE) e o PR ainda não tem o label '${REVIEW_LABEL}'. Não foi possível resolver o revisor par automaticamente: aplique o label 'author:<SeuAgente>' neste PR para o check indicar o par exato (ADR-004 §2.2), ou identifique-o manualmente e faça handoff via [@Par](agent://<id>) na issue Paperclip. O check reavalia sozinho no evento 'labeled'."
+          fi
           exit 1
