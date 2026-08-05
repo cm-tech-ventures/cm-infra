@@ -44,6 +44,8 @@ resource "google_cloud_run_v2_service" "service" {
       max_instance_count = var.max_instances
     }
 
+    session_affinity = var.session_affinity
+
     containers {
       image = var.image
 
