@@ -87,6 +87,7 @@ jobs:
           cm-sdk/**
           config/settings*
           **/AGENTS.md
+          docs/adr/**
           '
 
           PATTERNS="$(printf '%s\n%s\n' "$DEFAULT_PATTERNS" "$EXTRA_PATHS" | sed '/^\s*$/d')"
