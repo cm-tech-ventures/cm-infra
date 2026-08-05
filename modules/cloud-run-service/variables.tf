@@ -102,6 +102,19 @@ variable "release_command" {
   default     = ["python", "manage.py", "release"]
 }
 
+variable "session_affinity" {
+  description = <<-EOT
+    Habilita afinidade de sessão do Cloud Run (mesmo cliente -> mesma instância,
+    best-effort via cookie/roteamento do GFE). Default false (stateless). Ative
+    para serviços com estado em memória por instância atrelado a uma sessão de
+    protocolo, ex. MCP com Mcp-Session-Id (CMV-287): sem afinidade, o GFE pode
+    balancear a próxima chamada da mesma sessão para outra instância, que não
+    reconhece o Mcp-Session-Id e responde 400.
+  EOT
+  type        = bool
+  default     = false
+}
+
 variable "deployer_service_account" {
   description = "Email da SA de deploy (WIF) que pode atuar como a SA do serviço. Vazio = não concede."
   type        = string
