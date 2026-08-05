@@ -119,6 +119,7 @@ passa direto (evita fricção em commits de docs, testes unitários e scaffold s
 | `cm-sdk/**` | Consumido por todas as verticais — breaking change cascateia |
 | `config/settings*` | Configurações de runtime — erro aqui derruba o serviço |
 | `**/AGENTS.md` | Política de execução dos agentes — altera governança |
+| `docs/adr/**` | Decisões de arquitetura/governança — inclusive este próprio ADR |
 
 **Racionalidade da lista:** um erro em qualquer um desses paths pode propagar para múltiplos
 serviços ou ser irreversível. Commits de `README`, `tests/`, `docs/` fora de `docs/api/` e
