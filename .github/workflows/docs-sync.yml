@@ -1,0 +1,130 @@
+# Reusable: sincroniza doc técnica (docs/) do repo chamador para cm-docs.
+# Copia source-path para <cm-docs>/docs/target-path, excluindo os paths de
+# operação de negócio informados em exclude-paths, e commita direto em main
+# do cm-docs (sem PR — ver docs/meta-sync-strategy.md do cm-docs, decisão
+# CMV-434: a revisão de conteúdo acontece no repo de origem, cm-docs é só
+# espelho). Dispare no push em main do repo chamador.
+#
+# Uso no repo chamador (~10 linhas), em `.github/workflows/docs-sync.yml`:
+#
+#   name: docs-sync
+#   on:
+#     push:
+#       branches: [main]
+#       paths: ["docs/**"]
+#   jobs:
+#     docs-sync:
+#       uses: cm-tech-ventures/cm-infra/.github/workflows/docs-sync.yml@main
+#       with:
+#         target-path: core/cm-identity
+#         # exclude-paths (opcional): um path relativo a source-path por linha.
+#         # exclude-paths: |
+#         #   operacao
+#       secrets:
+#         CM_DOCS_SYNC_PAT: ${{ secrets.CM_DOCS_SYNC_PAT }}
+name: docs-sync
+
+on:
+  workflow_call:
+    inputs:
+      source-path:
+        description: Diretório de doc técnica no repo chamador, relativo à raiz.
+        type: string
+        default: "docs"
+      target-path:
+        description: >
+          Subpath de destino dentro de docs/ no cm-docs (ex.: core/cm-identity,
+          verticais/sys-bjj). Convenção: core/<repo> ou verticais/<vertical>.
+        type: string
+        required: true
+      exclude-paths:
+        description: >
+          Paths de operação de negócio a excluir do sync, um por linha, relativos
+          a source-path (ex.: operacao). Nunca entram no cm-docs (fora de escopo,
+          ver PROPOSTA.md do cm-docs).
+        type: string
+        default: ""
+      cm-docs-repo:
+        description: Repo de destino no formato org/repo.
+        type: string
+        default: "cm-tech-ventures/cm-docs"
+      commit-message:
+        description: Mensagem do commit no cm-docs.
+        type: string
+        default: ""
+    secrets:
+      CM_DOCS_SYNC_PAT:
+        description: >
+          PAT fine-grained (contents:write) da service account com acesso ao repo
+          cm-docs, usado para commitar direto em main (github.token padrão não
+          alcança outro repo). Débito técnico anotado: migrar para GitHub App
+          (ver PROPOSTA.md do cm-docs).
+        required: true
+
+jobs:
+  docs-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo de origem
+        uses: actions/checkout@v4
+        with:
+          path: source
+          sparse-checkout: |
+            ${{ inputs.source-path }}
+          sparse-checkout-cone-mode: false
+
+      - name: Checkout cm-docs
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.cm-docs-repo }}
+          token: ${{ secrets.CM_DOCS_SYNC_PAT }}
+          path: cm-docs
+
+      - name: Sincroniza docs/ para cm-docs
+        env:
+          SOURCE_PATH: ${{ inputs.source-path }}
+          TARGET_PATH: ${{ inputs.target-path }}
+          EXCLUDE_PATHS: ${{ inputs.exclude-paths }}
+        run: |
+          set -euo pipefail
+
+          SRC="source/${SOURCE_PATH}"
+          DEST="cm-docs/docs/${TARGET_PATH}"
+
+          if [ ! -d "$SRC" ]; then
+            echo "Nada em ${SRC} para sincronizar — pulando."
+            exit 0
+          fi
+
+          RSYNC_EXCLUDES=()
+          while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            RSYNC_EXCLUDES+=(--exclude "$line")
+          done <<< "$EXCLUDE_PATHS"
+
+          mkdir -p "$DEST"
+          rsync -a --delete "${RSYNC_EXCLUDES[@]}" "$SRC/" "$DEST/"
+
+      - name: Commit e push no cm-docs
+        env:
+          COMMIT_MESSAGE: ${{ inputs.commit-message }}
+          TARGET_PATH: ${{ inputs.target-path }}
+          SOURCE_REPO: ${{ github.repository }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          cd cm-docs
+
+          git config user.name "cm-docs-sync-bot"
+          git config user.email "cm-docs-sync-bot@users.noreply.github.com"
+
+          git add "docs/${TARGET_PATH}"
+
+          if git diff --cached --quiet; then
+            echo "Sem mudanças em docs/${TARGET_PATH} — nada a commitar."
+            exit 0
+          fi
+
+          MSG="${COMMIT_MESSAGE:-docs(sync): atualiza ${TARGET_PATH} a partir de ${SOURCE_REPO}@${SOURCE_SHA}}"
+          git commit -m "$MSG"
+          git push origin HEAD:main
