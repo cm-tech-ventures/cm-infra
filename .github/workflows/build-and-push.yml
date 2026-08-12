@@ -92,15 +92,27 @@ jobs:
           ssh-add "$KEY_FILE"
           rm -f "$KEY_FILE"
 
-      - name: Build and push
-        id: push
+      - name: Set image tag
+        id: vars
         run: |
           REPO="${{ inputs.gcp-region }}-docker.pkg.dev/${{ inputs.gcp-project-id }}/${{ inputs.artifact-repository }}/${{ inputs.image-name }}"
-          TAG="${REPO}:${GITHUB_SHA}"
-          docker buildx build \
-            --ssh default \
-            --load \
-            -f "${{ inputs.dockerfile }}" -t "$TAG" "${{ inputs.context }}"
-          docker push "$TAG"
-          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$TAG")
+          echo "repo=${REPO}" >> "$GITHUB_OUTPUT"
+          echo "tag=${REPO}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ inputs.context }}
+          file: ${{ inputs.dockerfile }}
+          push: true
+          tags: ${{ steps.vars.outputs.tag }}
+          ssh: default
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Resolver digest
+        id: push
+        run: |
+          DIGEST="${{ steps.vars.outputs.repo }}@${{ steps.build.outputs.digest }}"
           echo "image-uri=${DIGEST}" >> "$GITHUB_OUTPUT"
