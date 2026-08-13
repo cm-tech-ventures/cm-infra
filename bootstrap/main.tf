@@ -94,11 +94,17 @@ resource "google_service_account_iam_member" "wif_binding" {
 }
 
 # Permissões mínimas de deploy (push de imagem, deploy Cloud Run, state, scheduler).
+# monitoring.alertPolicyEditor + monitoring.notificationChannelEditor: cores passaram a
+# instanciar o módulo monitoring-alert-email via Terraform (CMV-513) — sem essas duas roles
+# o `terraform apply` do deploy falha com 403 ao criar google_monitoring_alert_policy /
+# google_monitoring_notification_channel.
 resource "google_project_iam_member" "deployer_roles" {
   for_each = toset([
     "roles/run.admin",
     "roles/artifactregistry.writer",
     "roles/cloudscheduler.admin",
+    "roles/monitoring.alertPolicyEditor",
+    "roles/monitoring.notificationChannelEditor",
   ])
   project = var.project_id
   role    = each.value
