@@ -34,6 +34,7 @@
 #   permissions:
 #     contents: read
 #     pull-requests: read
+#     issues: read
 #   jobs:
 #     peer-review:
 #       uses: cm-tech-ventures/cm-infra/.github/workflows/peer-review.yml@main
@@ -63,6 +64,10 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+      # O endpoint de labels (`gh api repos/{repo}/issues/{n}/labels`) fica
+      # sob o escopo `issues`, não `pull-requests` (CMV-561). O caller também
+      # precisa conceder `issues: read`, senão a interseção derruba o token.
+      issues: read
     steps:
       - name: Avalia paths sensíveis x label de revisão
         env:
