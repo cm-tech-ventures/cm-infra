@@ -98,6 +98,9 @@ resource "google_service_account_iam_member" "wif_binding" {
 # instanciar o módulo monitoring-alert-email via Terraform (CMV-513) — sem essas duas roles
 # o `terraform apply` do deploy falha com 403 ao criar google_monitoring_alert_policy /
 # google_monitoring_notification_channel.
+# logging.configWriter: observabilidade mínima por tool (CMV-498) passou a instanciar
+# google_logging_metric (log-based metric) — sem essa role o apply falha com 403 ao
+# criar a métrica (logging.logMetrics.create).
 resource "google_project_iam_member" "deployer_roles" {
   for_each = toset([
     "roles/run.admin",
@@ -105,6 +108,7 @@ resource "google_project_iam_member" "deployer_roles" {
     "roles/cloudscheduler.admin",
     "roles/monitoring.alertPolicyEditor",
     "roles/monitoring.notificationChannelEditor",
+    "roles/logging.configWriter",
   ])
   project = var.project_id
   role    = each.value
