@@ -14,6 +14,7 @@ locals {
     "iam.googleapis.com",
     "iamcredentials.googleapis.com",
     "sts.googleapis.com",
+    "bigquery.googleapis.com",
   ]
 }
 
@@ -219,6 +220,59 @@ resource "google_service_account_iam_member" "ops_observer_token_creator" {
   service_account_id = google_service_account.ops_observer.name
   role               = "roles/iam.serviceAccountTokenCreator"
   member             = each.value
+}
+
+# --- BigQuery: logs de tool call do cm-mcp/md-mcp (CMV-594, filha de CMV-593) ---
+# Dataset único para as duas fontes de tool call (cm-mcp aqui neste projeto; md-mcp
+# roda em projeto próprio da família MD — infra dele fora deste repo, ver comentário
+# de fechamento da issue). Tabela particionada nativa via bigquery_options no sink
+# (não o default `_YYYYMMDD` por wildcard) para o dbt do cm-analytics declarar a
+# source sem glob de tabelas.
+resource "google_bigquery_dataset" "mcp_logs" {
+  project     = var.project_id
+  dataset_id  = "raw_mcp_logs"
+  location    = var.region
+  description = "Logs estruturados de tool call do cm-mcp/md-mcp (evento tool_call), via Cloud Logging sink (CMV-594)."
+}
+
+resource "google_logging_project_sink" "mcp_tool_calls" {
+  project     = var.project_id
+  name        = "cm-mcp-tool-calls-to-bq"
+  destination = "bigquery.googleapis.com/projects/${var.project_id}/datasets/${google_bigquery_dataset.mcp_logs.dataset_id}"
+
+  # jsonPayload.event="tool_call": formato emitido por service/observability.py
+  # do cm-mcp (CMV-498) e equivalente do md-mcp (CMV-591/592). resource.labels.service_name
+  # diferencia a origem (cm-mcp vs md-mcp) já que os dois podem cair no mesmo projeto/dataset.
+  filter = <<-EOT
+    resource.type="cloud_run_revision"
+    jsonPayload.event="tool_call"
+    resource.labels.service_name=("cm-mcp" OR "md-mcp")
+  EOT
+
+  bigquery_options {
+    use_partitioned_tables = true
+  }
+
+  unique_writer_identity = true
+}
+
+# Sem essa concessão o sink falha silenciosamente ao gravar (grava para o _Default
+# sink coletor de erros, não para o dataset) — a writer_identity do sink precisa de
+# dataEditor no dataset, nunca no projeto inteiro.
+resource "google_bigquery_dataset_iam_member" "mcp_logs_sink_writer" {
+  project    = var.project_id
+  dataset_id = google_bigquery_dataset.mcp_logs.dataset_id
+  role       = "roles/bigquery.dataEditor"
+  member     = google_logging_project_sink.mcp_tool_calls.writer_identity
+}
+
+# SA do pipeline dbt do cm-analytics (analytics-pipeline-job@...) — leitura para
+# declarar a source no staging, sem poder de escrita sobre o dataset de logs.
+resource "google_bigquery_dataset_iam_member" "mcp_logs_dbt_reader" {
+  project    = var.project_id
+  dataset_id = google_bigquery_dataset.mcp_logs.dataset_id
+  role       = "roles/bigquery.dataViewer"
+  member     = "serviceAccount:${var.dbt_pipeline_service_account}"
 }
 
 # --- Artifact Registry compartilhado dos cores ---

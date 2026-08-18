@@ -22,3 +22,13 @@ output "ops_observer_service_account" {
   description = "Email da SA read-only de observabilidade — usar em --impersonate-service-account na rotina Ops semanal (CMV-319)."
   value       = google_service_account.ops_observer.email
 }
+
+output "mcp_logs_dataset" {
+  description = "Dataset BigQuery de destino dos logs de tool call do cm-mcp/md-mcp (CMV-594)."
+  value       = google_bigquery_dataset.mcp_logs.dataset_id
+}
+
+output "mcp_logs_sink_writer_identity" {
+  description = "Writer identity do sink do Cloud Logging — referência para debug de permissão (CMV-594)."
+  value       = google_logging_project_sink.mcp_tool_calls.writer_identity
+}

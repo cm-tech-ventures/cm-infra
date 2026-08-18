@@ -41,3 +41,8 @@ variable "billing_account_id" {
   type        = string
   default     = ""
 }
+
+variable "dbt_pipeline_service_account" {
+  description = "E-mail da SA do Cloud Run Job do pipeline dbt do cm-analytics, autorizada como dataViewer no dataset raw_mcp_logs (CMV-594)."
+  type        = string
+}
