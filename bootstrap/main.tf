@@ -275,6 +275,19 @@ resource "google_bigquery_dataset_iam_member" "mcp_logs_dbt_reader" {
   member     = "serviceAccount:${var.dbt_pipeline_service_account}"
 }
 
+# Writer identities de sinks cross-project (ex: md-hom/md-mcp, CMV-599) que também
+# gravam em raw_mcp_logs. Cloud Logging sinks são escopados ao projeto onde vivem
+# (não veem logs de outros projetos), então cada projeto da família MD provisiona
+# seu próprio sink apontando pra este dataset; a IAM correspondente entra aqui porque
+# só este state tem permissão sobre o dataset.
+resource "google_bigquery_dataset_iam_member" "mcp_logs_external_sink_writer" {
+  for_each   = toset(var.mcp_logs_external_sink_writer_identities)
+  project    = var.project_id
+  dataset_id = google_bigquery_dataset.mcp_logs.dataset_id
+  role       = "roles/bigquery.dataEditor"
+  member     = each.value
+}
+
 # --- Artifact Registry compartilhado dos cores ---
 module "artifact_registry" {
   source        = "../modules/artifact-registry"
