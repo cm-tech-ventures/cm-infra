@@ -46,3 +46,16 @@ variable "dbt_pipeline_service_account" {
   description = "E-mail da SA do Cloud Run Job do pipeline dbt do cm-analytics, autorizada como dataViewer no dataset raw_mcp_logs (CMV-594)."
   type        = string
 }
+
+variable "mcp_logs_external_sink_writer_identities" {
+  description = <<-EOT
+    Writer identities (member IAM completo, ex: "serviceAccount:p123-abc@gcp-sa-logging.iam.gserviceaccount.com")
+    de sinks de Cloud Logging cross-project que escrevem no dataset raw_mcp_logs — um por projeto GCP onde um
+    core/serviço da família MD roda (ex: md-hom para o md-mcp, CMV-599). Cada sink é provisionado no repo do
+    serviço (fora deste), que expõe o writer_identity como output depois do primeiro apply; o valor entra aqui
+    manualmente porque não há trust de deploy cross-project entre os dois state (mesmo padrão do secret
+    IDENTITY_INTROSPECTION_CORE_KEY documentado em md-backend/mcp_server/infra/main.tf).
+  EOT
+  type    = list(string)
+  default = []
+}
