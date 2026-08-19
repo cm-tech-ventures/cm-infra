@@ -1,4 +1,4 @@
-# Reusable: gate de peer-review por status check (ADR-004, CMV-399/CMV-400/CMV-413).
+# Reusable: gate de peer-review por status check (ADR-004, CMV-399/CMV-400/CMV-413/CMV-608).
 #
 # Fica vermelho quando o diff do PR toca path sensível e ainda não há o
 # label `peer-reviewed`; verde caso contrário ou após o label ser aplicado
@@ -159,17 +159,18 @@ jobs:
             esac
           done <<< "$CHANGED_FILES"
 
-          # Matriz de pares (ADR-004 §2.2) — nome -> agent id (Paperclip).
+          # Matriz de pares (ADR-004 §2.2, revisão 2026-08-18 / CMV-608) — nome -> agent id
+          # (Paperclip). CEO, CTO e QA saíram da matriz como autores (não abrem PRs; papéis
+          # de coordenação/governança). O CTO só entra via override de conteúdo (§2.3),
+          # nunca como par por autoria.
           resolve_reviewer() {
             case "$1" in
               BackendCore) echo "IntegrationsEngineer 8f9026cd-ab66-4ca0-a6f7-1ca6bb000de8" ;;
               IntegrationsEngineer) echo "BackendCore 710887d8-2631-4246-aa83-e8fb6db4d8e7" ;;
               VerticalMD) echo "VerticalBJJ d7c47ceb-39ce-4b87-a07b-aaf153a491d4" ;;
               VerticalBJJ) echo "VerticalMD bdfda58a-8693-4e25-96cd-c9378c0b105b" ;;
-              DataEngineer) echo "BackendCore 710887d8-2631-4246-aa83-e8fb6db4d8e7" ;;
-              PlatformEngineer) echo "CTO a892a163-cc2b-4ade-a761-7117501c3b48" ;;
-              CTO) echo "PlatformEngineer 7e1e257b-012c-4865-b41c-4b36ebd776ca" ;;
-              CEO) echo "CTO a892a163-cc2b-4ade-a761-7117501c3b48" ;;
+              PlatformEngineer) echo "DataEngineer ef155bef-ddaf-45c7-be8b-19909f5e5857" ;;
+              DataEngineer) echo "PlatformEngineer 7e1e257b-012c-4865-b41c-4b36ebd776ca" ;;
               *) echo "" ;;
             esac
           }
