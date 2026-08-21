@@ -34,7 +34,6 @@
 #   permissions:
 #     contents: read
 #     pull-requests: read
-#     issues: read
 #   jobs:
 #     peer-review:
 #       uses: cm-tech-ventures/cm-infra/.github/workflows/peer-review.yml@main
@@ -64,10 +63,13 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
-      # O endpoint de labels (`gh api repos/{repo}/issues/{n}/labels`) fica
-      # sob o escopo `issues`, não `pull-requests` (CMV-561). O caller também
-      # precisa conceder `issues: read`, senão a interseção derruba o token.
-      issues: read
+      # CMV-639 (regressão de CMV-561): pedir `issues: read` aqui derruba o
+      # job com `startup_failure` sempre que um caller não foi atualizado
+      # para conceder essa permissão — e a propagação manual pra cada repo
+      # nunca alcança 100% (6 de 8 repos ficaram pra trás). Em vez de exigir
+      # o escopo `issues`, lemos os labels via `pulls/{n}` (que já os inclui
+      # no payload) — isso cabe no escopo `pull-requests` que todo caller já
+      # concede, eliminando a dependência de propagação entre repos.
     steps:
       - name: Avalia paths sensíveis x label de revisão
         env:
@@ -138,7 +140,9 @@ jobs:
 
           echo "Path sensível tocado: $TOUCHED_SENSITIVE"
 
-          LABELS="$(gh api "repos/${REPO}/issues/${PR_NUMBER}/labels" --jq '.[].name')"
+          # Lido via pulls/{n} (não issues/{n}/labels) — ver comentário na
+          # seção `permissions` acima (CMV-639).
+          LABELS="$(gh api "repos/${REPO}/pulls/${PR_NUMBER}" --jq '.labels[].name')"
 
           if echo "$LABELS" | grep -Fxq "$REVIEW_LABEL"; then
             echo "::notice::Diff toca path sensível, mas já tem o label '${REVIEW_LABEL}' — check verde."
