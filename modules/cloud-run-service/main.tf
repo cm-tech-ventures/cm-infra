@@ -31,6 +31,16 @@ resource "google_service_account_iam_member" "deployer_act_as" {
   member             = "serviceAccount:${var.deployer_service_account}"
 }
 
+# CMV-602: RequestLoggingMiddleware (cm-service-template) escreve direto no
+# Cloud Logging via client oficial (logName customizado, não stdout) — a SA
+# dedicada do serviço precisa de Logs Writer para essas chamadas não
+# falharem com 403 em produção.
+resource "google_project_iam_member" "log_writer" {
+  project = var.project_id
+  role    = "roles/logging.logWriter"
+  member  = "serviceAccount:${google_service_account.service.email}"
+}
+
 resource "google_cloud_run_v2_service" "service" {
   project  = var.project_id
   name     = var.service_name

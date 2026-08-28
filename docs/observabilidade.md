@@ -1,4 +1,4 @@
-# Padrão de observabilidade dos serviços (CMV-595)
+# Padrão de observabilidade dos serviços (CMV-595, CMV-602)
 
 **Decisão do board (2026-08-18)**: em vez de adotar uma stack de
 observabilidade dedicada (Datadog, Grafana/Loki), generalizamos o padrão
@@ -16,8 +16,7 @@ operação.
 
 `cm-service-template` traz `service/common/observability/middleware.py`
 (`RequestLoggingMiddleware`), instalado por padrão em `MIDDLEWARE`. Loga uma
-linha JSON por request em stdout — Cloud Run captura e indexa automaticamente
-em Cloud Logging, sem client de logging adicional:
+linha JSON por request:
 
 ```json
 {"event": "http_request", "request_id": "...", "org_id": "...", "method": "POST",
@@ -29,8 +28,41 @@ metadados (mesma regra do ADR-003 §3 para mensagens de erro).
 
 Serviços não-Django (ex. cm-mcp, FastMCP) mantêm sua própria implementação do
 mesmo formato (`event`, `status`, campo de latência, campo de erro) —
-`service/observability.py` do cm-mcp já segue esse contrato; não precisa
-migrar para o middleware Django.
+`service/observability.py` do cm-mcp/md-mcp segue o mesmo contrato e adota a
+convenção de `logName` abaixo (CMV-602).
+
+### Convenção de `logName` (CMV-602)
+
+Em Cloud Run, escrever com `print()`/stdout faz o Cloud Run capturar o log e
+indexá-lo automaticamente no Cloud Logging **sob o logName padrão
+`run.googleapis.com/stdout`** — junto com qualquer outro print/traceback não
+estruturado do processo. Isso tem duas consequências ruins, descobertas na
+prática nas CMV-593/594/597/598/599/601:
+
+1. Um sink Cloud Logging → BigQuery apontado para esses logs gera uma tabela
+   com nome ilegível (`run_googleapis_com_stdout` ou `_YYYYMMDD`), nunca um
+   nome intencional como `tool_calls`.
+2. Mistura o log de aplicação com qualquer outra coisa que caia no stdout do
+   processo — dificulta filtrar/tipar por sink.
+
+Por isso, `RequestLoggingMiddleware` escreve **direto no Cloud Logging** via
+client oficial (`google-cloud-logging`), sob um **`logName` customizado e
+explícito** (`settings.OBSERVABILITY_LOG_NAME`, env `LOG_NAME`, default
+`app-events`) — nunca via stdout. Fora do Cloud Run (dev local, testes,
+detectado por ausência da env `K_SERVICE`), continua caindo no logger stdlib
+de stdout, sem custo de autenticação contra o Cloud Logging real.
+
+Convenção de nome: um `logName` por domínio de evento, não por serviço —
+`app-events` é o default genérico do template; serviços com um domínio de
+evento próprio e volume relevante (ex. `tool-calls` no cm-mcp/md-mcp) devem
+sobrescrever via `var.log_name` no `infra/main.tf`. Isso faz qualquer sink
+futuro derivar um nome de tabela BigQuery legível automaticamente
+(`google_logging_project_sink` particiona por logName), sem reverse-engineering
+como nas issues citadas acima.
+
+A SA dedicada do serviço (módulo `cloud-run-service`) recebe
+`roles/logging.logWriter` no projeto para essas chamadas funcionarem — não é
+mais implícito via SA de compute default.
 
 ## 2. Métrica de erro + alerta (Terraform)
 
@@ -62,9 +94,16 @@ segregada por serviço.
 
 Para consulta/dashboard consistente sobre o histórico de logs estruturados
 (não só o log-based metric acima, que é só contagem), o padrão é um
-`google_logging_project_sink` filtrado por `jsonPayload.event=<...>` apontando
-para um dataset BigQuery — **o mesmo mecanismo usado no mart de observabilidade
-do cm-mcp no cm-analytics (CMV-593)**, que serve de modelo replicável.
+`google_logging_project_sink` filtrado por `logName="projects/<project>/logs/<log_name>"`
+(ver convenção de `logName` na seção 1) apontando para um dataset BigQuery —
+**o mesmo mecanismo usado no mart de observabilidade do cm-mcp no cm-analytics
+(CMV-593)**, que serve de modelo replicável.
+
+**Migração pendente (CMV-602, sem urgência)**: o sink `cm-mcp-tool-calls-to-bq`
+(md-hom) e a extração do cm-analytics (CMV-601) ainda apontam para o logName
+antigo (`run.googleapis.com/stdout`, tabela `run_googleapis_com_stdout`) — o
+pipeline atual continua funcionando com esse nome até a migração para o
+logName customizado (`tool-calls`) acontecer; não é bloqueante.
 
 Isto **não é padrão de saída obrigatório do template** — é opt-in por
 serviço, habilitado quando o serviço tiver necessidade real de
@@ -87,7 +126,7 @@ resource "google_logging_project_sink" "observability" {
   name        = "${var.service_name}-observability-sink"
   project     = var.project_id
   destination = "bigquery.googleapis.com/projects/${var.project_id}/datasets/${google_bigquery_dataset.observability.dataset_id}"
-  filter      = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${var.service_name}\" AND jsonPayload.event=\"http_request\""
+  filter      = "logName=\"projects/${var.project_id}/logs/${var.log_name}\" AND resource.labels.service_name=\"${var.service_name}\""
 
   bigquery_options {
     use_partitioned_tables = true
