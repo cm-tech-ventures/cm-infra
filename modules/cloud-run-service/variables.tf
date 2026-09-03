@@ -102,6 +102,20 @@ variable "release_command" {
   default     = ["python", "manage.py", "release"]
 }
 
+variable "cpu_idle" {
+  description = <<-EOT
+    Cobrança de CPU do Cloud Run. true (default) = por requisição
+    (request-based): a CPU só é alocada enquanto há requisição em
+    processamento e a instância ociosa não cobra CPU. false = sempre alocada
+    (always-allocated / instance-based): cobra cada segundo de instância
+    viva, inclusive ociosa. Só use false para serviço que faz trabalho fora
+    do ciclo da requisição (thread em background, on_commit tardio, tarefa
+    asyncio solta) — nenhum core nem vertical faz isso hoje.
+  EOT
+  type        = bool
+  default     = true
+}
+
 variable "session_affinity" {
   description = <<-EOT
     Habilita afinidade de sessão do Cloud Run (mesmo cliente -> mesma instância,
