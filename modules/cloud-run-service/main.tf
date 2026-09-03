@@ -63,6 +63,14 @@ resource "google_cloud_run_v2_service" "service" {
         # (CMV-395: 500 recorrente no cm-crm correlacionado 100% com cold
         # start; boost reduz a janela de risco, não elimina).
         startup_cpu_boost = true
+        # Modo de cobrança da CPU. true = por requisição (CPU só durante o
+        # processamento; instância ociosa não cobra CPU). false = sempre
+        # alocada (cobra cada segundo de instância viva, ~2-3x mais caro em
+        # serviços scale-to-zero). O default da API v2 é sempre alocada, e
+        # sem declarar aqui o Terraform não gerencia o campo — foi assim que
+        # os cores e o sys-bjj ficaram com cpu-throttling=false sem ninguém
+        # pedir (levantamento de custo 2026-09-02).
+        cpu_idle = var.cpu_idle
       }
 
       dynamic "env" {
