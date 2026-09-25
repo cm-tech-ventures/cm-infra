@@ -1,0 +1,25 @@
+# Catálogo de alertas do projeto bjj-system (sys-bjj).
+#
+# Formato idêntico ao de environments/alertas-core/alertas.yaml — mesmo módulo,
+# outro projeto e outro estado. Aqui só existe a caixa `dinheiro`: nada que roda
+# no bjj-system é dado interno.
+
+- nome: rotinas-bjj
+  titulo: "sys-bjj — rotina agendada não rodou"
+  sensor: scheduler
+  alvo: []
+  caixa: dinheiro
+  janela: 86400s
+  doc: |
+    Uma rotina agendada do sys-bjj não completou.
+
+    Por que isto interrompe: a rotina diária expira reserva da loja E APAGA
+    RECORTE DE ROSTO por LGPD. Parada em silêncio, a empresa guarda dado
+    biométrico além do prazo sem saber — não é gráfico desatualizado, é
+    exposição legal.
+
+    Onde olhar: Cloud Run > sys-bjj-backend > Registros, e o log do Scheduler
+    (`resource.type="cloud_scheduler_job"`) no projeto bjj-system.
+
+    `alvo: []` cobre todas as rotinas do projeto, inclusive a MENSAL quando
+    ela for ligada — não é preciso mexer neste arquivo naquele dia.
