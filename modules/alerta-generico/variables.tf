@@ -56,12 +56,6 @@ variable "janela" {
   default     = "3600s"
 }
 
-variable "limite_frequencia" {
-  description = "Intervalo mínimo entre notificações. Vazio = sem limite, e é o certo para a caixa que interrompe. Use '86400s' na de digestão."
-  type        = string
-  default     = ""
-}
-
 variable "documentacao" {
   description = "O que o seu eu futuro precisa saber às 23h. Vai no corpo da notificação — escreva onde olhar, não o que aconteceu."
   type        = string

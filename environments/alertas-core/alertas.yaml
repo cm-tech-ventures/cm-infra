@@ -39,6 +39,7 @@
   sensor: scheduler
   alvo: []
   caixa: interno
+  janela: 86400s
   doc: |
     Uma ou mais rotinas agendadas do core falharam nas últimas 24h. Não é
     urgente por si: aqui caem extratores e keep-alive, cujo efeito é gráfico
@@ -52,6 +53,7 @@
   sensor: job
   alvo: []
   caixa: interno
+  janela: 86400s
   doc: |
     Um Cloud Run Job do core terminou em falha. Este sensor existe porque o
     verde do Cloud Scheduler é mentira por construção nas rotinas disparadas
