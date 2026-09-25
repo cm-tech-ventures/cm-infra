@@ -23,9 +23,8 @@ module "alerta" {
   sensor     = each.value.sensor
   alvo       = lookup(each.value, "alvo", [])
 
-  canal_id          = var.canais[each.value.caixa]
-  severidade        = "ERROR"
-  limite_frequencia = ""
-  janela            = lookup(each.value, "janela", "3600s")
-  documentacao      = each.value.doc
+  canal_id     = var.canais[each.value.caixa]
+  severidade   = "ERROR"
+  janela       = lookup(each.value, "janela", "3600s")
+  documentacao = each.value.doc
 }

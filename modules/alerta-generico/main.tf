@@ -146,16 +146,15 @@ resource "google_monitoring_alert_policy" "alerta" {
   alert_strategy {
     auto_close = "86400s"
 
-    # Sem limite de frequência na caixa que interrompe: ali cada alerta precisa
-    # tocar. Com limite na caixa de digestão, senão ela vira ruído e leva a
-    # caixa urgente junto — alerta ignorado é pior que alerta inexistente,
-    # porque dá a sensação de que alguém está olhando.
-    dynamic "notification_rate_limit" {
-      for_each = var.limite_frequencia == "" ? [] : [1]
-      content {
-        period = var.limite_frequencia
-      }
-    }
+    # NÃO use notification_rate_limit aqui: a API só o aceita em política
+    # baseada em log (`conditionMatchedLog`), e recusa com 400 nas de limiar,
+    # que são as destas. Conferido no apply de 24/09/2026.
+    #
+    # A digestão sai de outro lugar, e de graça: o Cloud Monitoring notifica
+    # uma vez quando o incidente ABRE e não renotifica enquanto ele segue
+    # aberto. Com `janela` de 86400s, as falhas do dia caem todas no mesmo
+    # incidente e geram uma notificação só. Quem controla o ritmo é a janela,
+    # não um limite de frequência.
   }
 
   documentation {

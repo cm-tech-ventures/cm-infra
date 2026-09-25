@@ -10,11 +10,6 @@
 locals {
   alertas = { for a in yamldecode(file("${path.module}/alertas.yaml")) : a.nome => a }
 
-  # Só a caixa que interrompe fica sem limite de frequência.
-  limite = {
-    dinheiro = ""
-    interno  = "86400s"
-  }
 
   severidade = {
     dinheiro = "ERROR"
@@ -32,9 +27,8 @@ module "alerta" {
   sensor     = each.value.sensor
   alvo       = lookup(each.value, "alvo", [])
 
-  canal_id          = var.canais[each.value.caixa]
-  severidade        = local.severidade[each.value.caixa]
-  limite_frequencia = local.limite[each.value.caixa]
-  janela            = lookup(each.value, "janela", "3600s")
-  documentacao      = each.value.doc
+  canal_id     = var.canais[each.value.caixa]
+  severidade   = local.severidade[each.value.caixa]
+  janela       = lookup(each.value, "janela", "3600s")
+  documentacao = each.value.doc
 }
