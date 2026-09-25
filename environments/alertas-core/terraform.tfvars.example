@@ -1,0 +1,13 @@
+# Copie para terraform.tfvars (ignorado pelo git) antes do plan.
+#
+# IDs dos canais de notificação Slack, criados à mão em 24/09/2026. Não são
+# segredo: identificam o canal, não dão acesso a ele. Estão aqui para que
+# quem for aplicar não precise caçá-los.
+#
+# Reconferir com:
+#   gcloud beta monitoring channels list --project=cm-ventures-core
+
+canais = {
+  dinheiro = "projects/cm-ventures-core/notificationChannels/7610245762565736868"  # Slack #dinheiro-cliente
+  interno  = "projects/cm-ventures-core/notificationChannels/11673622105768378166" # Slack #dado-interno
+}

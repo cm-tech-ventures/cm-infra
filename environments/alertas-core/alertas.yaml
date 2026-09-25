@@ -1,0 +1,63 @@
+# Catálogo de alertas do projeto cm-ventures-core.
+#
+# Para criar um alerta novo, acrescente um item aqui. Não é preciso abrir
+# nenhum .tf: o main.tf lê este arquivo e cria uma política por item.
+#
+# campos:
+#   nome      identificador curto, kebab-case, único no arquivo
+#   titulo    como aparece no console e na notificação
+#   sensor    scheduler = o relógio tocou e a chamada falhou
+#             job       = a execução nasceu e morreu no meio
+#   alvo      lista de jobs vigiados; [] = todos do projeto, hoje e no futuro
+#   caixa     dinheiro = interrompe você  |  interno = digestão, 1x por dia
+#   doc       o que o seu eu futuro precisa saber às 23h
+#
+# A regra que sustenta o desenho: a caixa `dinheiro` só recebe o que custa
+# dinheiro ao cliente ou expõe a empresa a risco legal. Se ela passar a receber
+# mais de dois alertas por semana, o desenho falhou — e o conserto é tirar
+# item daqui, não criar filtro no Slack.
+
+- nome: regua-cobranca
+  titulo: "Régua de cobrança do cm-billing não rodou"
+  sensor: scheduler
+  alvo: [billing-regua-diaria]
+  caixa: dinheiro
+  doc: |
+    A régua diária do cm-billing não completou. Ela reconcilia cobrança,
+    confere extrato e marca inadimplência — parada, o dinheiro do cliente
+    para de ser conferido e ninguém percebe.
+
+    Onde olhar: Cloud Run > billing > Registros, e o log do Scheduler
+    (`resource.type="cloud_scheduler_job"`, job_id `billing-regua-diaria`).
+
+    Já aconteceu: em 17–21/09/2026 ela ficou 5 dias em UNAUTHENTICATED por
+    falta de `SECURE_PROXY_SSL_HEADER` no Django atrás do Cloud Run. Se o
+    status for UNAUTHENTICATED de novo, comece por aí.
+
+- nome: scheduler-digest
+  titulo: "Cloud Scheduler (core) — alguma tentativa falhou"
+  sensor: scheduler
+  alvo: []
+  caixa: interno
+  doc: |
+    Uma ou mais rotinas agendadas do core falharam nas últimas 24h. Não é
+    urgente por si: aqui caem extratores e keep-alive, cujo efeito é gráfico
+    velho, não dinheiro perdido.
+
+    A régua de cobrança tem alerta próprio na caixa que interrompe — se ela
+    aparecer SÓ aqui, algo está errado na configuração.
+
+- nome: jobs-digest
+  titulo: "Cloud Run Jobs (core) — alguma execução falhou"
+  sensor: job
+  alvo: []
+  caixa: interno
+  doc: |
+    Um Cloud Run Job do core terminou em falha. Este sensor existe porque o
+    verde do Cloud Scheduler é mentira por construção nas rotinas disparadas
+    via API de administração: ele confirma que a execução foi CRIADA, não que
+    o trabalho funcionou.
+
+    Causas comuns: banco Supabase pausado, credencial inválida, ou 401 na
+    origem dos dados. O `mdbackend-extract` falha em rajadas por 401 do
+    backend-md desde ~14/09/2026 — se for ele, é conhecido.

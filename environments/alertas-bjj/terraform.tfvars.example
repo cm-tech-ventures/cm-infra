@@ -1,0 +1,11 @@
+# Copie para terraform.tfvars (ignorado pelo git) antes do plan.
+#
+# Canal de notificação é POR PROJETO: o id do cm-ventures-core não vale aqui.
+# Criado à mão em 24/09/2026 no projeto bjj-system.
+#
+# Reconferir com:
+#   gcloud beta monitoring channels list --project=bjj-system --account=bjjsystem25@gmail.com
+
+canais = {
+  dinheiro = "projects/bjj-system/notificationChannels/11876842634215232783" # Slack #dinheiro-cliente
+}
