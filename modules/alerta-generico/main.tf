@@ -55,7 +55,25 @@ resource "google_logging_metric" "scheduler_errors" {
   }
 }
 
+# O descritor de uma métrica derivada de log leva até ~10 min para ficar
+# visível na API do Monitoring, e a política abaixo referencia a métrica pelo
+# tipo. Sem esta espera, o primeiro apply cria a métrica e falha na política
+# com 404 — corrida real, observada em 24/09/2026 no bjj-system. Nos applies
+# seguintes a espera não reexecuta: ela só depende do id da métrica.
+resource "time_sleep" "propagacao_da_metrica" {
+  count = local.is_scheduler ? 1 : 0
+
+  depends_on      = [google_logging_metric.scheduler_errors]
+  create_duration = var.espera_propagacao
+
+  triggers = {
+    metric = google_logging_metric.scheduler_errors[0].id
+  }
+}
+
 resource "google_monitoring_alert_policy" "alerta" {
+  depends_on = [time_sleep.propagacao_da_metrica]
+
   project      = var.project_id
   display_name = var.titulo
   combiner     = "OR"

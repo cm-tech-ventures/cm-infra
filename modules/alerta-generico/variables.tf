@@ -66,3 +66,9 @@ variable "documentacao" {
   description = "O que o seu eu futuro precisa saber às 23h. Vai no corpo da notificação — escreva onde olhar, não o que aconteceu."
   type        = string
 }
+
+variable "espera_propagacao" {
+  description = "Tempo entre criar a métrica derivada de log e criar a política que a referencia. O descritor leva alguns minutos para aparecer na API do Monitoring; sem isto o primeiro apply falha com 404."
+  type        = string
+  default     = "360s"
+}
