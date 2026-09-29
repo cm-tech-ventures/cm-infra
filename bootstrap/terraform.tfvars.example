@@ -16,6 +16,20 @@ github_owner      = "cm-tech-ventures"
 state_bucket_name = "cm-ventures-core-tfstate"
 
 # Repos autorizados a assumir a SA de deploy via Workload Identity Federation.
+#
+# ATENCAO: esta lista reproduz o STATE, nao a realidade inteira. Tres repos
+# — cm-analytics, cm-billing e cm-docs — tiveram o binding criado a mao com
+# `gcloud iam service-accounts add-iam-policy-binding` e vivem fora do
+# Terraform. Um apply NAO os revoga (google_service_account_iam_member e
+# aditivo, nao autoritativo), por isso o plan fecha em "No changes" mesmo
+# assim. Mas eles sao infra nao declarada: se o binding sumir, ninguem
+# descobre pelo codigo. Trazer os tres para ca e uma mudanca a parte, com
+# plan proprio (vai aparecer como "3 to add", adotando o que ja existe).
+#
+# Conferir a realidade com:
+#   gcloud iam service-accounts get-iam-policy \
+#     github-deployer-prod@cm-ventures-core.iam.gserviceaccount.com \
+#     --project=cm-ventures-core
 github_repositories = [
   "cm-tech-ventures/cm-crm",
   "cm-tech-ventures/cm-identity",
