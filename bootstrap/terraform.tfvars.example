@@ -1,0 +1,42 @@
+# Copie para terraform.tfvars (ignorado pelo git) antes do plan/apply.
+#
+# Estes valores são os que estão EM PRODUÇÃO hoje, reconstruídos a partir do
+# state em 29/09/2026. Até então não estavam escritos em lugar nenhum: quem
+# aplicasse o bootstrap sem eles via o Terraform propor DESTRUIR permissões
+# reais (as ligações WIF de cada repo, o acesso do sink do md-hom, o papel de
+# logging do deployer). Foi por isso que o bootstrap ficou marcado como
+# "não aplicar". Nada aqui é segredo — são identificadores, não credenciais.
+#
+# Conferir com:
+#   terraform state list
+#   gcloud projects get-iam-policy cm-ventures-core
+
+project_id        = "cm-ventures-core"
+github_owner      = "cm-tech-ventures"
+state_bucket_name = "cm-ventures-core-tfstate"
+
+# Repos autorizados a assumir a SA de deploy via Workload Identity Federation.
+github_repositories = [
+  "cm-tech-ventures/cm-crm",
+  "cm-tech-ventures/cm-identity",
+  "cm-tech-ventures/cm-infra",
+  "cm-tech-ventures/cm-mcp",
+  "cm-tech-ventures/cm-sdk",
+  "cm-tech-ventures/cm-service-template",
+]
+
+# SA do Cloud Run Job do pipeline dbt do cm-analytics (CMV-594).
+dbt_pipeline_service_account = "analytics-pipeline-job@cm-ventures-core.iam.gserviceaccount.com"
+
+# Quem pode assumir a SA cm-ops-observer por impersonation (CMV-319).
+ops_observer_impersonators = ["user:cm.tech.ventures@gmail.com"]
+
+# Billing account do core, para conceder roles/billing.viewer à cm-ops-observer.
+billing_account_id = "013EE2-6E67DB-A423CD"
+
+# Writer identity do sink de logs do md-hom (projeto 407283246579) que escreve
+# no dataset raw_mcp_logs deste projeto. Provisionado no repo do md-mcp; o
+# valor entra aqui à mão porque não há trust cross-project entre os dois state.
+mcp_logs_external_sink_writer_identities = [
+  "serviceAccount:service-407283246579@gcp-sa-logging.iam.gserviceaccount.com",
+]
