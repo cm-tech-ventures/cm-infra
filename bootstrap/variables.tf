@@ -56,6 +56,12 @@ variable "mcp_logs_external_sink_writer_identities" {
     manualmente porque não há trust de deploy cross-project entre os dois state (mesmo padrão do secret
     IDENTITY_INTROSPECTION_CORE_KEY documentado em md-backend/mcp_server/infra/main.tf).
   EOT
-  type    = list(string)
-  default = []
+  type        = list(string)
+  default     = []
+}
+
+variable "retencao_dry_run" {
+  description = "Repassado ao módulo artifact-registry: true faz o AR só registrar no log o que apagaria."
+  type        = bool
+  default     = true
 }

@@ -301,4 +301,22 @@ module "artifact_registry" {
   region        = var.region
   repository_id = "cm-cores"
   writers       = [google_service_account.deployer.email]
+
+  # Um pacote por serviço que publica aqui. Conferir com:
+  #   gcloud artifacts packages list --repository=cm-cores \
+  #     --location=southamerica-east1 --project=cm-ventures-core
+  # Pacote novo que não entrar nesta lista NÃO fica protegido: cai na regra de
+  # idade e perde tudo com mais de 30 dias. Ao criar um core novo, adicione aqui.
+  pacotes_protegidos = [
+    "analytics-dashboard-proxy",
+    "analytics-pipeline",
+    "billing",
+    "cm-mcp",
+    "crm",
+    "identity",
+    "keepalive-check",
+    "service",
+  ]
+
+  retencao_dry_run = var.retencao_dry_run
 }
