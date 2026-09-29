@@ -99,11 +99,17 @@ resource "google_service_account_iam_member" "wif_binding" {
 # instanciar o módulo monitoring-alert-email via Terraform (CMV-513) — sem essas duas roles
 # o `terraform apply` do deploy falha com 403 ao criar google_monitoring_alert_policy /
 # google_monitoring_notification_channel.
+# logging.configWriter: mesma história, um ciclo depois. As políticas de alerta que
+# entraram em 24/09 contam linhas de log, e para isso o deploy cria
+# google_logging_metric (modules/alerta-generico, modules/log-error-alert) — sem esta
+# role o apply falha com 403. O papel foi concedido à mão na ocasião e não foi escrito
+# aqui; esta linha só registra no código o que já vale em produção desde então.
 resource "google_project_iam_member" "deployer_roles" {
   for_each = toset([
     "roles/run.admin",
     "roles/artifactregistry.writer",
     "roles/cloudscheduler.admin",
+    "roles/logging.configWriter",
     "roles/monitoring.alertPolicyEditor",
     "roles/monitoring.notificationChannelEditor",
   ])

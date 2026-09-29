@@ -47,15 +47,28 @@ injeta `bucket` e `prefix=<service>/<environment>` no `init`.
 
 ## Bootstrap (one-time, requer projeto GCP)
 
+O bootstrap **já foi aplicado**; o state vive em `gs://cm-ventures-core-tfstate`,
+prefixo `bootstrap/prod`. Para planejar/aplicar sobre o que existe:
+
 ```bash
 cd bootstrap
+cp terraform.tfvars.example terraform.tfvars   # valores reais, ignorado pelo git
+terraform init \
+  -backend-config="bucket=cm-ventures-core-tfstate" -backend-config="prefix=bootstrap/prod"
+terraform plan   # tem que dar "No changes"; qualquer destroy = input faltando
+```
+
+**Nunca rode o plan passando variáveis soltas na linha de comando.** Elas não
+têm default, e um valor errado (uma lista vazia, por exemplo) faz o Terraform
+propor destruir permissões reais de deploy. Use sempre o `terraform.tfvars`.
+
+Do zero, num projeto novo (não é o caso do core):
+
+```bash
 terraform init -backend=false   # primeiro apply com state local
-terraform apply -var project_id=... -var github_owner=cm-tech-ventures \
-  -var 'github_repositories=["cm-tech-ventures/cm-identity", ...]' \
-  -var state_bucket_name=cm-tech-ventures-tf-state
-# depois migre o state para o bucket recém-criado:
+terraform apply -var-file=terraform.tfvars
 terraform init -migrate-state \
-  -backend-config="bucket=cm-tech-ventures-tf-state" -backend-config="prefix=bootstrap/prod"
+  -backend-config="bucket=<bucket>" -backend-config="prefix=bootstrap/prod"
 ```
 
 Outputs do bootstrap (`workload_identity_provider`, `deploy_service_account`,
