@@ -164,7 +164,67 @@ de permissão: é projeto de cota errado — passe `--billing-project=<projeto>`
 - **Erro de CI** — fica fora por decisão: o deploy de homolog do sys-bjj falha de
   propósito, e seria falso positivo diário.
 
-## 8. Como testar sem encostar em produção
+## 8. Dívidas conhecidas, com o gatilho de cada uma
+
+Três coisas estão mais simples do que o ideal, **de propósito**. Cada uma tem o
+sinal que diz quando mexer — antes dele, a abstração custa mais do que economiza;
+depois dele, a duplicação é que passa a custar.
+
+### 8.1 Catálogo num arquivo só
+
+Hoje são ~21 linhas por alerta (quase tudo é o bloco `doc:`). Projetando: 10
+alertas ≈ 210 linhas, 20 ≈ 420.
+
+**Gatilho:** quando for preciso buscar em vez de rolar para achar uma entrada —
+na prática, uns 15–20 alertas por ambiente.
+
+**Conserto, uma linha no `main.tf` do ambiente:**
+
+```hcl
+# de:
+yamldecode(file("${path.module}/alertas.yaml"))
+# para:
+flatten([for f in fileset(path.module, "alertas/*.yaml") :
+         yamldecode(file("${path.module}/${f}"))])
+```
+
+O catálogo vira `alertas/billing.yaml`, `alertas/analytics.yaml`. Nenhuma outra
+mudança: o `for_each` e o módulo continuam iguais.
+
+### 8.2 Um diretório por projeto, com 5 arquivos quase idênticos
+
+**Esta é a que dói mais, e não é a do arquivo único.** Cada ambiente são 7
+arquivos, dos quais `main.tf`, `variables.tf`, `versions.tf` e `outputs.tf` são
+cópia com o nome do projeto trocado. Ligar o Meus Dredinhos cria ~14 arquivos
+novos, uns 10 deles duplicados.
+
+O custo real aparece no conserto: uma correção no `main.tf` precisa ser repetida
+em N diretórios. O conserto do `notification_rate_limit` (§6) teria sido copiado
+quatro vezes se já houvesse quatro ambientes.
+
+**Por que está assim:** state separado por projeto é necessário, e os projetos
+vivem em **contas Google diferentes** — provider aliasado exigiria uma credencial
+com permissão cruzada, que é risco permanente maior que o problema que resolve.
+Restrição real, não escolha.
+
+**Gatilho:** o terceiro ambiente. Hoje são dois (`alertas-core`, `alertas-bjj`);
+o MD traz mais dois de uma vez.
+
+**Conserto:** um módulo `alertas-de-um-projeto` que empacota o `for_each` e a
+leitura do YAML. Cada ambiente passa a ser um `versions.tf` (backend + provider) e
+um `main.tf` de ~6 linhas. Os states continuam separados.
+
+### 8.3 Espera fixa de propagação da métrica
+
+O `time_sleep` do módulo (§6) espera 360s sempre, mesmo quando o descritor já
+propagou — foi o que aconteceu no apply do `alertas-core`, que levou 6 minutos à
+toa. Funciona e é inofensivo; só é grosseiro.
+
+**Gatilho:** se a espera passar a atrapalhar algum fluxo automatizado. Enquanto
+for um apply manual e ocasional, 6 minutos não justificam a complexidade de uma
+espera condicional.
+
+## 9. Como testar sem encostar em produção
 
 Alerta que nunca disparou não é alerta, é decoração. O jeito seguro:
 
@@ -196,7 +256,7 @@ Um detalhe: com `janela: 86400s` o incidente de teste fica aberto por até 24h,
 porque o valor permanece dentro da janela de agregação. Fechar na mão no console
 se incomodar.
 
-## 9. Por que este padrão existe
+## 10. Por que este padrão existe
 
 Em 17–21/09/2026 a régua diária de cobrança do `cm-billing` ficou **cinco dias**
 respondendo `UNAUTHENTICATED` (faltava `SECURE_PROXY_SSL_HEADER` no Django atrás
