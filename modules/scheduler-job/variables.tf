@@ -85,3 +85,15 @@ variable "retry_count" {
   type        = number
   default     = 1
 }
+
+variable "paused" {
+  description = <<-EOT
+    true deixa o job declarado mas sem disparar. Serve para desligar uma rotina
+    sem apagá-la: a definição, o alvo e o histórico continuam no código e no
+    console, e religar é mudar esta linha — diferente de remover o módulo, que
+    destrói o job e perde o rastro de que ele existiu.
+    Default false: nenhum consumidor atual muda de comportamento.
+  EOT
+  type        = bool
+  default     = false
+}
