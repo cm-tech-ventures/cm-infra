@@ -54,3 +54,11 @@ billing_account_id = "013EE2-6E67DB-A423CD"
 mcp_logs_external_sink_writer_identities = [
   "serviceAccount:service-407283246579@gcp-sa-logging.iam.gserviceaccount.com",
 ]
+
+# Retenção do Artifact Registry: false = apaga de verdade.
+#
+# A variável tem default true (dry run) de propósito, para que um projeto novo
+# nasça sem risco. Aqui é false porque o alcance foi medido em 30/09/2026:
+# resolvendo tag->digest nas 445 imagens do cm-cores, nenhuma imagem viva cai —
+# nem o keepalive-check, que tem uma única, de 15/07. Apaga 297 versões.
+retencao_dry_run = false
