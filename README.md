@@ -16,8 +16,18 @@ Contrato de design: documento `design` em CMV-4 (revisão CTO). Invariantes:
 ```
 modules/
   cloud-run-service/   # serviço + SA dedicada + secrets (refs) + domínio opcional
+  cloud-run-job/       # job batch (disparado pelo Scheduler via Run Admin API)
   artifact-registry/   # repositório Docker + IAM readers/writers
   scheduler-job/       # Cloud Scheduler → Cloud Run via OIDC (sem worker permanente)
+  static-site-iap/     # site estático atrás de IAP
+  alerta-generico/     # alerta de rotina agendada (ver docs/alertas.md)
+  log-error-alert/     # alerta de erro de aplicação (ver docs/observabilidade.md)
+  monitoring-alert-email/  # LEGADO: cria canal E política juntos; não reusar
+environments/          # instâncias com state próprio
+  keepalive/           # keep-alive dos bancos Supabase free-tier
+  alertas-core/        # alertas de rotina do cm-ventures-core (catálogo em YAML)
+  alertas-bjj/         # idem, projeto bjj-system (outra conta GCP, outro state)
+docs/                  # padrões da casa — ler antes de criar recurso novo
 .github/workflows/     # reusable workflows (workflow_call)
   django-ci.yml        # ruff + pytest + contrato OpenAPI (spectacular diff)
   build-and-push.yml   # build Docker + push AR via WIF; output image-uri com digest
@@ -87,3 +97,17 @@ workflows pelos cores. Nenhuma chave JSON de service account existe em lugar nen
 terraform -chdir=modules/cloud-run-service init -backend=false && terraform -chdir=modules/cloud-run-service validate
 # idem para os demais módulos e bootstrap; tflint opcional
 ```
+
+## Documentação
+
+| Documento | Para quê |
+|---|---|
+| [docs/alertas.md](docs/alertas.md) | **Criar um alerta de rotina agendada.** O padrão da casa: catálogo em YAML, dois sensores, duas caixas no Slack. |
+| [docs/observabilidade.md](docs/observabilidade.md) | Log estruturado e alerta de erro de aplicação (5xx, exceção). |
+| [docs/keepalive.md](docs/keepalive.md) | Keep-alive dos bancos Supabase free-tier. |
+| [docs/ops-semanal.md](docs/ops-semanal.md) | Rotina semanal de operação. |
+| [docs/supabase-projects.md](docs/supabase-projects.md) | Inventário dos projetos Supabase. |
+| [docs/adr/](docs/adr/) | Decisões de arquitetura. |
+
+**Este repo não tem CI.** Qualquer mudança de Terraform exige mostrar o `plan`
+literal ao Carlos antes de qualquer `apply`.

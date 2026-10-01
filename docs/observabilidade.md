@@ -1,5 +1,11 @@
 # Padrão de observabilidade dos serviços (CMV-595)
 
+> **Escopo:** este documento cobre o eixo **erro de aplicação** (5xx, exceção com
+> contexto), via log estruturado + `log-error-alert`. O eixo **rotina agendada**
+> (o relógio tocou? o trabalho terminou?) está em [alertas.md](alertas.md), que é
+> onde fica o padrão em produção desde 24/09/2026. Os dois convivem e não se
+> substituem.
+
 **Decisão do board (2026-08-18)**: em vez de adotar uma stack de
 observabilidade dedicada (Datadog, Grafana/Loki), generalizamos o padrão
 criado no cm-mcp (CMV-498, log estruturado + métrica log-based) como parte do
@@ -53,10 +59,21 @@ module "error_alert" {
 ```
 
 Sem `notification_channel_id`, a política é criada mas não notifica ninguém —
-não bloqueia o apply enquanto o canal não estiver definido. Reusar o canal de
-e-mail já existente em `cm-ventures-core` (mesmo do keepalive Supabase,
-CMV-53) é a opção default; só criar canal novo se o board pedir notificação
-segregada por serviço.
+não bloqueia o apply enquanto o canal não estiver definido.
+
+**Atualização de 24/09/2026 — a orientação de canal mudou.** O default deixou de
+ser "reusar o canal de e-mail do keepalive": a entrega agora é por **Slack**, em
+duas caixas (`#dinheiro-cliente` e `#dado-interno`), e **o Terraform nunca cria o
+canal** — ele nasce à mão e só o id é consumido. O motivo e os ids estão em
+[alertas.md §5](alertas.md). Ao instanciar este módulo, aponte para a caixa certa:
+erro de aplicação em serviço sem cliente do outro lado é `#dado-interno`.
+
+**⚠ Cardinalidade.** O `label_field` deste módulo vira rótulo de uma métrica
+derivada de log, que é cobrada por quantas combinações gera (150 MiB/mês grátis,
+depois US$ 0,258/MiB). O comentário do módulo sugere `request_id/org_id` — **não
+use nenhum dos dois**: `org_id` é identificador de cliente e `request_id` é um
+valor por requisição, e qualquer um estoura a cota. Prefira rótulo de baixa
+cardinalidade (`path`, `tool`, `status`).
 
 ## 3. Sink Cloud Logging → BigQuery (opcional, por serviço)
 
@@ -114,12 +131,18 @@ padrão antes de tocar nos que já têm tráfego real):
 
 1. **cm-service-template** (feito nesta issue) — todo core novo já nasce com
    o middleware + módulo disponível.
-2. **cm-crm, cm-scheduling** — cores mais recentes, menor superfície de
-   request, bom lugar para validar o middleware em produção sem risco alto.
+2. **cm-crm** — core mais recente, menor superfície de request, bom lugar para
+   validar o middleware em produção sem risco alto. (O `cm-scheduling` citado na
+   versão original deste plano **nunca foi criado**.)
 3. **cm-identity** — crítico (introspecção usada por todos os outros cores);
    adotar só depois do padrão validado nos passos 1-2, e sem o sink BigQuery
    inicialmente (só log + alerta).
-4. **cm-erp, cm-billing** — mesma prioridade, paralelizáveis entre si.
+4. **cm-billing** — já instancia o módulo, atrás da flag `enable_error_alert`,
+   que nasce desligada. (O `cm-erp` citado na versão original **nunca foi
+   criado**.) Em 30/09/2026 o log estruturado `service/common/observability`
+   existe em **dois repos apenas**: `cm-service-template` e `cm-billing` — ou
+   seja, ligar este eixo nos demais exige adotar o log antes, e não é "só ligar a
+   flag".
 5. **md-backend, sys-bjj-backend** — donos são VerticalMD/VerticalBJJ, fora
    do território do PlatformEngineer; a adoção nesses dois é responsabilidade
    do dono de cada serviço, este documento só define o padrão a seguir.
