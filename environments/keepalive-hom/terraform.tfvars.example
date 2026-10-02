@@ -1,0 +1,7 @@
+# Copie para terraform.tfvars (ignorado pelo git) antes do plan/apply.
+project_id         = "cm-ventures-core"
+region             = "southamerica-east1"
+environment        = "hom"
+# A mesma imagem de produção: o que muda entre ambientes é a lista de bancos.
+image              = "southamerica-east1-docker.pkg.dev/cm-ventures-core/cm-cores/keepalive-check:v1"
+notification_email = "cm.tech.ventures@gmail.com"
