@@ -162,11 +162,13 @@ resource "google_project_iam_member" "deployer_secretmanager_admin" {
 # Prefixo do nome completo, não sufixo genérico: um "-asaas-api-key" solto também
 # casaria uma futura chave de subconta (billing-subconta-*), que é credencial de
 # cliente e não é assunto do deploy. Cada alternativa abaixo cobre só os secrets
-# listados. Limite do IAM: 12 operadores lógicos por condição; esta usa 8.
+# listados. Limite do IAM: 12 operadores lógicos por condição; esta usa 9.
 #   billing[-hom]-asaas-api-key, billing[-hom]-asaas-webhook-token
 #   identity[-hom]-google-oauth-client-id, identity[-hom]-google-oauth-client-secret
 #   identity[-hom]-resend-api-key, identity-hom-introspection-core-key
 #   cm-analytics-iap-oauth-client-{id,secret}, cm-analytics-oauth2-proxy-{cookie-secret,allowed-emails}
+#   analytics-md-db-url: a plataforma de dados (#89) dá secretAccessor nele à
+#   analytics-bq-pipeline pelo Terraform do cm-analytics, aplicado pelo deployer.
 locals {
   secrets_prefixo = "projects/${data.google_project.current.number}/secrets/"
   deployer_secrets_extra = [
@@ -179,6 +181,7 @@ locals {
     "identity-hom-introspection-core-key",
     "cm-analytics-iap-oauth-client-",
     "cm-analytics-oauth2-proxy-",
+    "analytics-md-db-url",
   ]
 }
 
@@ -189,7 +192,7 @@ resource "google_project_iam_member" "deployer_secretmanager_admin_extra" {
 
   condition {
     title       = "core-secrets-extra"
-    description = "Admin nos secrets de deploy fora da core-secrets-only: Asaas do billing, OAuth/Resend do identity, chave de introspecção de hom e OAuth do IAP (cm-infra#73)."
+    description = "Admin nos secrets de deploy fora da core-secrets-only: Asaas do billing, OAuth/Resend do identity, chave de introspecção de hom, OAuth do IAP e analytics-md-db-url (cm-infra#73)."
     expression  = join(" || ", [for p in local.deployer_secrets_extra : "resource.name.startsWith(\"${local.secrets_prefixo}${p}\")"])
   }
 }
