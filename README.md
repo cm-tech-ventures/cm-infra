@@ -106,6 +106,7 @@ terraform -chdir=modules/cloud-run-service init -backend=false && terraform -chd
 
 | Documento | Para quê |
 |---|---|
+| [docs/permissoes.md](docs/permissoes.md) | **Dar, conferir ou tirar permissão de nuvem.** As 4 regras, quem aplica o quê, o que dá para condicionar e como revogar. |
 | [docs/alertas.md](docs/alertas.md) | **Criar um alerta de rotina agendada.** O padrão da casa: catálogo em YAML, dois sensores, duas caixas no Slack. |
 | [docs/observabilidade.md](docs/observabilidade.md) | Log estruturado e alerta de erro de aplicação (5xx, exceção). |
 | [docs/keepalive.md](docs/keepalive.md) | Keep-alive dos bancos Supabase free-tier. |
