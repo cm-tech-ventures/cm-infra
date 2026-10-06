@@ -23,6 +23,8 @@ modules/
   alerta-generico/     # alerta de rotina agendada (ver docs/alertas.md)
   log-error-alert/     # alerta de erro de aplicação (ver docs/observabilidade.md)
   monitoring-alert-email/  # LEGADO: cria canal E política juntos; não reusar
+catalogo/
+  rotinas.yaml         # RETRATO das rotinas agendadas (não é fonte; ver o topo do arquivo)
 environments/          # instâncias com state próprio
   keepalive/           # keep-alive dos bancos Supabase free-tier
   alertas-core/        # alertas de rotina do cm-ventures-core (catálogo em YAML)
