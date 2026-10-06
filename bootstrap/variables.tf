@@ -42,11 +42,6 @@ variable "billing_account_id" {
   default     = ""
 }
 
-variable "dbt_pipeline_service_account" {
-  description = "E-mail da SA do Cloud Run Job do pipeline dbt do cm-analytics, autorizada como dataViewer no dataset raw_mcp_logs (CMV-594)."
-  type        = string
-}
-
 variable "mcp_logs_external_sink_writer_identities" {
   description = <<-EOT
     Writer identities (member IAM completo, ex: "serviceAccount:p123-abc@gcp-sa-logging.iam.gserviceaccount.com")
