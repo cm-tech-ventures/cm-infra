@@ -34,6 +34,10 @@ resource "google_cloud_run_v2_job" "job" {
   name     = var.job_name
   location = var.region
 
+  # Trava do provider (só existe no state): com true, um destroy falha. Default
+  # true, igual ao do provider; desligar só para remover o job de propósito.
+  deletion_protection = var.deletion_protection
+
   template {
     template {
       service_account = google_service_account.job.email

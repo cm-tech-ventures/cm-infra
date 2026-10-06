@@ -124,3 +124,23 @@ variable "pointer_object_name" {
   type        = string
   default     = "current-release"
 }
+
+variable "deletion_protection" {
+  description = <<-EOT
+    Trava de exclusão do serviço proxy no Terraform (atributo do provider, não da
+    API). Default true, o mesmo do provider: só passe false num apply anterior à
+    remoção do site.
+  EOT
+  type        = bool
+  default     = true
+}
+
+variable "force_destroy" {
+  description = <<-EOT
+    Se o destroy do bucket do site apaga os objetos junto. Default false (o valor
+    fixo de antes): com objetos dentro, o destroy falha. Só passe true num apply
+    anterior à remoção do site.
+  EOT
+  type        = bool
+  default     = false
+}
