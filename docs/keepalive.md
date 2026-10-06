@@ -50,17 +50,17 @@ apenas no secret.
 
 | Project ref | Sistema | Conexão | Desde |
 |---|---|---|---|
-| `uooowvvrblslwszmcghp` | a identificar | pooler `aws-1` | antes da v7 |
+| `uooowvvrblslwszmcghp` | cores em produção: Supabase `cm-ventures-core` (identity, billing, crm…) | pooler `aws-1` | antes da v7 |
 | `aoriyfujsilisrrvadxy` | `sys-bjj-backend` (bjj-system) | direta, `db.<ref>.supabase.co` | 2026-07-29 ([CMV-297](/CMV/issues/CMV-297)) |
-| `pmbgbvmwwiezajsveswv` | a identificar | pooler `aws-0` | antes da v7 |
-| `iimjsfqodjeybzdwjowz` | a identificar | pooler `aws-0` | antes da v7 |
+| `pmbgbvmwwiezajsveswv` | sys-bjj homologação: Supabase `bjj-system-hom` | pooler `aws-0` | antes da v7 |
+| `iimjsfqodjeybzdwjowz` | cores em homologação: Supabase `cm-ventures-core-hom` (identity-hom, billing-hom) | pooler `aws-0` | antes da v7 |
 | `jwyjqiezwjccnxrbmlai` | MD produção: Supabase `md-backend`, servido pelo GCP `md-hom` | pooler `aws-1-sa-east-1`, porta 5432 | 2026-10-06 (v7) |
 | `ajjlyugjutltxyepzbhk` | MD homologação: Supabase `md-backend-prod`, ligado ao GCP `md-hlg` | pooler `aws-1-sa-east-1`, porta 5432 | 2026-10-06 (v7) |
 
 O banco dos cores (`cm-ventures-core`) é um projeto Supabase só, usado por
-cm-identity, cm-crm e os outros cores: mesmo host, schemas diferentes. Ele
-está entre os refs "a identificar" acima. Quem confirmar qual é qual deve
-preencher a coluna.
+cm-identity, cm-crm e os outros cores: mesmo host, schemas diferentes. O
+mesmo vale para o `cm-ventures-core-hom` em homologação. Nomes conferidos no
+inventário da API do Supabase (24/09 e 05/10/2026).
 
 Os dois bancos do MD entraram pela etapa
 [cm-infra#59](https://github.com/cm-tech-ventures/cm-infra/issues/59), parte
