@@ -1,10 +1,14 @@
 output "sinks" {
   description = "Sink e writer identity por projeto de origem."
   value = {
-    "cm-ventures-core" = {
-      sink            = module.sink_core.sink_name
-      writer_identity = module.sink_core.writer_identity
-      destination     = module.sink_core.destination
+    for projeto, m in {
+      "cm-ventures-core" = module.sink_core
+      "md-hom"           = module.sink_md_hom
+      "bjj-system"       = module.sink_bjj
+      } : projeto => {
+      sink            = m.sink_name
+      writer_identity = m.writer_identity
+      destination     = m.destination
     }
   }
 }
