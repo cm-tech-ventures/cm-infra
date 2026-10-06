@@ -23,12 +23,19 @@ e quem é responsável por manter o keep-alive (CMV-53) cobrindo-o.
 | Sistema        | Project ref            | Organização Supabase (dona)         | Status                | Issue |
 |----------------|-------------------------|--------------------------------------|------------------------|-------|
 | cores (CM Ventures) | (ver `cm-ventures-core` / Secret Manager) | `cm.tech.ventures@gmail.com`         | OK — nasceu corporativo | — |
-| `backend-md` (md-hom) | `jwyjqiezwjccnxrbmlai` | **conta pessoal do Carlos** (a migrar) | ⏳ pendente de transferência de org para `ti.meusdredinhos@gmail.com` | [CMV-54](/CMV/issues/CMV-54) |
+| `md-backend`: MD produção (GCP `md-hom`) | `jwyjqiezwjccnxrbmlai` | `ti.meusdredinhos` | OK, já na org da vertical; DSN no keep-alive desde 2026-10-06 | [CMV-54](/CMV/issues/CMV-54), [cm-infra#59](https://github.com/cm-tech-ventures/cm-infra/issues/59) |
+| `md-backend-prod`: MD homologação (GCP `md-hlg`) | `ajjlyugjutltxyepzbhk` | `ti.meusdredinhos` | OK; DSN no keep-alive desde 2026-10-06 | [cm-infra#59](https://github.com/cm-tech-ventures/cm-infra/issues/59) |
 | `sys-bjj-backend` (bjj-system) | `aoriyfujsilisrrvadxy` | conta da vertical BJJ | OK — DSN incluído no keep-alive em 2026-07-29 | [CMV-297](/CMV/issues/CMV-297) |
 
-> Atualize a linha do `backend-md` assim que a transferência de organização for
-> confirmada pelo board: trocar "conta pessoal do Carlos" por
-> `ti.meusdredinhos@gmail.com` e status para "OK — migrado em `<data>`".
+> Os nomes do MD enganam. O projeto Supabase `md-backend` é a **produção**: é o
+> banco real do salão, servido hoje pelo GCP `md-hom`. O `md-backend-prod` é a
+> **homologação** nova, ligada ao GCP `md-hlg`. Ver a virada de ambientes em
+> [md-backend#308](https://github.com/cadusds2/md-backend/issues/308).
+>
+> A transferência do `md-backend` para a org `ti.meusdredinhos` (CMV-54) já foi
+> feita: em 06/10/2026 o projeto aparece nessa org. A data exata da
+> transferência não ficou registrada. O runbook abaixo fica como referência
+> para próximas transferências.
 
 ## Runbook — transferência de organização (sem downtime)
 
