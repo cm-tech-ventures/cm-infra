@@ -75,53 +75,45 @@ use nenhum dos dois**: `org_id` é identificador de cliente e `request_id` é um
 valor por requisição, e qualquer um estoura a cota. Prefira rótulo de baixa
 cardinalidade (`path`, `tool`, `status`).
 
-## 3. Sink Cloud Logging → BigQuery (opcional, por serviço)
+## 3. Sinks para o raw_logs (Cloud Logging → BigQuery)
 
-Para consulta/dashboard consistente sobre o histórico de logs estruturados
-(não só o log-based metric acima, que é só contagem), o padrão é um
-`google_logging_project_sink` filtrado por `jsonPayload.event=<...>` apontando
-para um dataset BigQuery — **o mesmo mecanismo usado no mart de observabilidade
-do cm-mcp no cm-analytics (CMV-593)**, que serve de modelo replicável.
+Não é mais opt-in por serviço. Existe **um sink por projeto GCP**, gerido no
+state `environments/log-sinks` com o módulo `modules/log-sink-bigquery`, e
+todos gravam no mesmo dataset `cm-ventures-core.raw_logs` (que é do Terraform
+do cm-analytics). O serviço não declara nada: basta emitir o envelope do
+`cm_sdk.observabilidade` no stdout com `env="prod"`.
 
-Isto **não é padrão de saída obrigatório do template** — é opt-in por
-serviço, habilitado quando o serviço tiver necessidade real de
-dashboard/consulta histórica (ex. incidentes recorrentes, SLA a acompanhar).
-Serviços que só precisam do alerta em tempo real (seção 2) não precisam do
-sink.
+- Filtro: Cloud Run (serviço ou job) + `jsonPayload.event:*` +
+  `jsonPayload.env="prod"`. Homologação não vai para o BigQuery.
+- Tabela: sempre `raw_logs.run_googleapis_com_stdout`, particionada por dia.
+  O nome não se escolhe; o nome legível nasce no dbt. Detalhes no README do
+  módulo.
+- O sink antigo do MCP (`cm-mcp-tool-calls-to-bq` → `raw_mcp_logs`, no
+  bootstrap) continua até a migração dele.
 
-Esqueleto de referência (a instanciar manualmente no `infra/main.tf` do
-serviço que optar por habilitar, seguindo o padrão do CMV-593 em
-`cm-analytics/terraform`):
+### Projetos
 
-```hcl
-resource "google_bigquery_dataset" "observability" {
-  project    = var.project_id
-  dataset_id = "${replace(var.service_name, "-", "_")}_observability"
-  location   = var.region
-}
+| Projeto | Sink | Estado |
+| --- | --- | --- |
+| cm-ventures-core | `eventos-para-raw-logs` | neste state |
+| md-hom | — | próximo PR |
+| bjj-system | — | próximo PR |
 
-resource "google_logging_project_sink" "observability" {
-  name        = "${var.service_name}-observability-sink"
-  project     = var.project_id
-  destination = "bigquery.googleapis.com/projects/${var.project_id}/datasets/${google_bigquery_dataset.observability.dataset_id}"
-  filter      = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${var.service_name}\" AND jsonPayload.event=\"http_request\""
+**Por que md-hom e bjj-system ainda não:** a conta que aplica este state
+(`cm.tech.ventures@gmail.com`) não tem acesso a esses projetos; cada um é de
+uma conta diferente. A proposta para o próximo PR, mantendo um state só e uma
+credencial só:
 
-  bigquery_options {
-    use_partitioned_tables = true
-  }
-}
+1. Uma vez, à mão, com a conta dona de cada projeto, conceder à conta do core
+   `roles/logging.configWriter` no projeto (só criar e editar sink; não lê log
+   nem mexe em serviço).
+2. Acrescentar `module "sink_md_hom"` e `module "sink_bjj"` neste main.tf,
+   com `project_id` do projeto. A IAM da writer identity cai no dataset do
+   core, onde a mesma conta já tem permissão.
 
-resource "google_project_iam_member" "sink_writer" {
-  project = var.project_id
-  role    = "roles/bigquery.dataEditor"
-  member  = google_logging_project_sink.observability.writer_identity
-}
-```
-
-Não extraímos isso como módulo `cm-infra` nesta issue porque só há um caso de
-uso concreto até agora (cm-mcp/CMV-593); se um segundo serviço adotar o sink,
-extrair para `modules/log-bigquery-sink` nesse momento (regra geral do
-template: extrair reutilização quando ela aparece, não antecipar).
+Assim não há duas credenciais no mesmo `apply`, nem writer identity copiada à
+mão entre states (o que o bootstrap faz hoje com
+`mcp_logs_external_sink_writer_identities`).
 
 ## 4. Plano de adoção incremental
 
