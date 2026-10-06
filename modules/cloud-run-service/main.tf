@@ -18,6 +18,21 @@ locals {
     } : nome => valor if valor != ""
   }
   env = merge(local.env_observabilidade, var.env)
+
+  # Secret de outro projeto chega como resource id completo
+  # ("projects/<p>/secrets/<s>"); o nome curto mora em var.project_id. O IAM
+  # precisa do projeto do secret, não do serviço — senão o provider grava o
+  # projeto do id no state e todo plan seguinte propõe replace para var.project_id.
+  secrets_ref = {
+    for nome, s in var.secrets : nome => (
+      can(regex("^projects/[^/]+/secrets/[^/]+$", s.secret))
+      ? {
+        project   = split("/", s.secret)[1]
+        secret_id = split("/", s.secret)[3]
+      }
+      : { project = var.project_id, secret_id = s.secret }
+    )
+  }
 }
 
 resource "google_service_account" "service" {
@@ -28,9 +43,9 @@ resource "google_service_account" "service" {
 
 # A SA do serviço só pode ler os segredos que o próprio serviço usa.
 resource "google_secret_manager_secret_iam_member" "reader" {
-  for_each  = var.secrets
-  project   = var.project_id
-  secret_id = each.value.secret
+  for_each  = local.secrets_ref
+  project   = each.value.project
+  secret_id = each.value.secret_id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.service.email}"
 }
