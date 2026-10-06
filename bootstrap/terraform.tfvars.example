@@ -39,9 +39,6 @@ github_repositories = [
   "cm-tech-ventures/cm-service-template",
 ]
 
-# SA do Cloud Run Job do pipeline dbt do cm-analytics (CMV-594).
-dbt_pipeline_service_account = "analytics-pipeline-job@cm-ventures-core.iam.gserviceaccount.com"
-
 # Quem pode assumir a SA cm-ops-observer por impersonation (CMV-319).
 ops_observer_impersonators = ["user:cm.tech.ventures@gmail.com"]
 

@@ -289,8 +289,8 @@ resource "google_bigquery_dataset_iam_member" "mcp_logs_sink_writer" {
 # apply real: o Google recusou com
 #   "Service account analytics-pipeline-job@... does not exist"
 #
-# A variável `dbt_pipeline_service_account` continua declarada, sem uso, para o
-# caso de o pipeline voltar com outro nome; se ficar órfã por muito tempo, sai.
+# A variável `dbt_pipeline_service_account` também saiu (cm-infra#65). Se o
+# raw_mcp_logs voltar a precisar de leitor dbt, a SA é analytics-bq-pipeline@.
 
 # Writer identities de sinks cross-project (ex: md-hom/md-mcp, CMV-599) que também
 # gravam em raw_mcp_logs. Cloud Logging sinks são escopados ao projeto onde vivem
