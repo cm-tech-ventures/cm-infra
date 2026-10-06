@@ -104,10 +104,17 @@ resource "google_service_account_iam_member" "wif_binding" {
 # google_logging_metric (modules/alerta-generico, modules/log-error-alert) — sem esta
 # role o apply falha com 403. O papel foi concedido à mão na ocasião e não foi escrito
 # aqui; esta linha só registra no código o que já vale em produção desde então.
+# bigquery.user: o cm-analytics passou a criar os datasets do armazém no Terraform
+# (Plataforma de dados, fase 1 / E1, cm-analytics#71). Sem ela o apply falha com 403
+# em bigquery.datasets.create. É o papel mínimo: cria dataset e roda job, mas não lê
+# dado de dataset nenhum. Quem cria o dataset vira OWNER dele, e isso basta para o
+# deploy dar as permissões por dataset (google_bigquery_dataset_iam_member) — sem
+# abrir billing_export nem raw_mcp_logs.
 resource "google_project_iam_member" "deployer_roles" {
   for_each = toset([
     "roles/run.admin",
     "roles/artifactregistry.writer",
+    "roles/bigquery.user",
     "roles/cloudscheduler.admin",
     "roles/logging.configWriter",
     "roles/monitoring.alertPolicyEditor",
