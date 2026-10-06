@@ -144,3 +144,9 @@ variable "force_destroy" {
   type        = bool
   default     = false
 }
+
+variable "deployer_service_account" {
+  description = "Email da SA de deploy (WIF) que pode atuar como a SA do proxy. Vazio = não concede."
+  type        = string
+  default     = ""
+}
