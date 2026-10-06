@@ -169,15 +169,24 @@ jobs:
       # seguro rodar em todo deploy. Roda logo após o `terraform apply` acima
       # ter publicado a nova revisão do Job com a imagem nova.
       #
-      # Best-effort quanto ao output `release_job_name`: cores que ainda não
-      # atualizaram seu infra/main.tf a partir do cm-service-template (ex.:
-      # cm-identity, cm-crm — ver CMV-39) não têm esse output. Nesse caso
-      # avisamos e seguimos sem quebrar o deploy, em vez de falhar duro.
+      # Dois casos em que não há release job, e os dois devem ser no-op:
+      #   1. output ausente — core que ainda não atualizou seu infra/main.tf a
+      #      partir do cm-service-template (ex.: cm-identity, cm-crm; CMV-39).
+      #   2. output presente mas NULO — serviço com `release_command = []`, que
+      #      não tem etapa de release (frontend Node, CMV-136; cm-backoffice na
+      #      onda 1, que não tem banco).
+      #
+      # `terraform output -raw` não serve para distinguir: num output nulo ele
+      # escreve a mensagem de erro no STDOUT, então `job_name` ficava com o
+      # texto "::error::Terraform exited with code 1." e o `gcloud run jobs
+      # execute` seguia adiante com isso como nome, falhando o deploy de um
+      # serviço que já estava no ar. `-json` devolve `null` literal e não
+      # contamina o stdout.
       - name: Executar release job (schema + migrate)
         run: |
-          job_name="$(terraform output -raw release_job_name 2>/dev/null || true)"
-          if [ -z "$job_name" ]; then
-            echo "::warning::Output 'release_job_name' não encontrado no infra/main.tf deste core — pulando release job (schema/migrate automático). Atualize infra/main.tf a partir do cm-service-template (CMV-39)."
+          job_name="$(terraform output -json release_job_name 2>/dev/null | jq -r 'if . == null then "" else . end' || true)"
+          if [ -z "$job_name" ] || [ "$job_name" = "null" ]; then
+            echo "::notice::Sem release job para este serviço (output ausente ou release_command = []) — pulando schema/migrate automático."
             exit 0
           fi
           project_id="$(terraform output -raw project_id)"
