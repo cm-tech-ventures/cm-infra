@@ -35,6 +35,12 @@ variable "env" {
   default     = {}
 }
 
+variable "versao" {
+  description = "Sha do commit da imagem. Vira CM_VERSION no container (cm_sdk.observabilidade). O deploy-cloud-run.yml exporta TF_VAR_versao; o main.tf do chamador declara a variável e repassa."
+  type        = string
+  default     = ""
+}
+
 variable "secrets" {
   description = <<-EOT
     Map nome-da-env => referência ao Secret Manager. Injetado via secret_key_ref;
