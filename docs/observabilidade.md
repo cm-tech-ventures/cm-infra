@@ -95,25 +95,20 @@ do cm-analytics). O serviço não declara nada: basta emitir o envelope do
 
 | Projeto | Sink | Estado |
 | --- | --- | --- |
-| cm-ventures-core | `eventos-para-raw-logs` | neste state |
-| md-hom | — | próximo PR |
-| bjj-system | — | próximo PR |
+| cm-ventures-core | `eventos-para-raw-logs` | neste state (cm-infra#55) |
+| md-hom | `eventos-para-raw-logs` | neste state |
+| bjj-system | `eventos-para-raw-logs` | neste state |
 
-**Por que md-hom e bjj-system ainda não:** a conta que aplica este state
-(`cm.tech.ventures@gmail.com`) não tem acesso a esses projetos; cada um é de
-uma conta diferente. A proposta para o próximo PR, mantendo um state só e uma
-credencial só:
+**Credencial:** um state só e uma conta só (`cm.tech.ventures@gmail.com`). A
+conta dona do md-hom e a do bjj-system concederam à conta do core, uma vez e à
+mão, `roles/logging.configWriter` no projeto. Esse papel só cria e edita sink:
+não lê log nem mexe em serviço. A IAM da writer identity de cada sink cai no
+dataset do core, onde a mesma conta já tem permissão. Assim não há writer
+identity copiada à mão entre states, que é o que o bootstrap faz hoje com
+`mcp_logs_external_sink_writer_identities`.
 
-1. Uma vez, à mão, com a conta dona de cada projeto, conceder à conta do core
-   `roles/logging.configWriter` no projeto (só criar e editar sink; não lê log
-   nem mexe em serviço).
-2. Acrescentar `module "sink_md_hom"` e `module "sink_bjj"` neste main.tf,
-   com `project_id` do projeto. A IAM da writer identity cai no dataset do
-   core, onde a mesma conta já tem permissão.
-
-Assim não há duas credenciais no mesmo `apply`, nem writer identity copiada à
-mão entre states (o que o bootstrap faz hoje com
-`mcp_logs_external_sink_writer_identities`).
+Projeto novo entra assim: a conta dona concede o papel, e entra um `module`
+a mais em `environments/log-sinks/main.tf`.
 
 ## 4. Plano de adoção incremental
 
