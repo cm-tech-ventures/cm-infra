@@ -150,6 +150,50 @@ resource "google_project_iam_member" "deployer_secretmanager_admin" {
   }
 }
 
+# Extensão da core-secrets-only (cm-infra#73, plano #70). A varredura de 06/10 achou
+# secrets que os deploys tocam e que a condição acima não cobre: hoje só funcionam por
+# causa do secretmanager.admin SEM condição que o deployer ganhou à mão, e que a E5 vai
+# tirar. Sem esta extensão, o primeiro deploy depois da E5 falha com 403.
+#
+# É um SEGUNDO binding, e não uma edição da condição acima, porque `condition` força
+# REPLACE no google_project_iam_member (destroy + create do binding). Somar um binding
+# condicional novo, com outro título, é "1 to add" e não encosta no que funciona.
+#
+# Prefixo do nome completo, não sufixo genérico: um "-asaas-api-key" solto também
+# casaria uma futura chave de subconta (billing-subconta-*), que é credencial de
+# cliente e não é assunto do deploy. Cada alternativa abaixo cobre só os secrets
+# listados. Limite do IAM: 12 operadores lógicos por condição; esta usa 8.
+#   billing[-hom]-asaas-api-key, billing[-hom]-asaas-webhook-token
+#   identity[-hom]-google-oauth-client-id, identity[-hom]-google-oauth-client-secret
+#   identity[-hom]-resend-api-key, identity-hom-introspection-core-key
+#   cm-analytics-iap-oauth-client-{id,secret}, cm-analytics-oauth2-proxy-{cookie-secret,allowed-emails}
+locals {
+  secrets_prefixo = "projects/${data.google_project.current.number}/secrets/"
+  deployer_secrets_extra = [
+    "billing-asaas-",
+    "billing-hom-asaas-",
+    "identity-google-oauth-client-",
+    "identity-hom-google-oauth-client-",
+    "identity-resend-api-key",
+    "identity-hom-resend-api-key",
+    "identity-hom-introspection-core-key",
+    "cm-analytics-iap-oauth-client-",
+    "cm-analytics-oauth2-proxy-",
+  ]
+}
+
+resource "google_project_iam_member" "deployer_secretmanager_admin_extra" {
+  project = var.project_id
+  role    = "roles/secretmanager.admin"
+  member  = "serviceAccount:${google_service_account.deployer.email}"
+
+  condition {
+    title       = "core-secrets-extra"
+    description = "Admin nos secrets de deploy fora da core-secrets-only: Asaas do billing, OAuth/Resend do identity, chave de introspecção de hom e OAuth do IAP (cm-infra#73)."
+    expression  = join(" || ", [for p in local.deployer_secrets_extra : "resource.name.startsWith(\"${local.secrets_prefixo}${p}\")"])
+  }
+}
+
 # Tentativa anterior escopava iam.serviceAccountAdmin por condição no sufixo de nome
 # da SA (endsWith "-run@..."). Isso nunca funciona: o motor de condições do IAM avalia
 # resource.name de Service Account usando o unique_id NUMÉRICO
@@ -198,6 +242,21 @@ resource "google_storage_bucket_iam_member" "deployer_state" {
   member = "serviceAccount:${google_service_account.deployer.email}"
 }
 
+# storage.admin só nos buckets que os deploys mantêm (cm-infra#73). Hoje o deployer
+# tem storage.admin no PROJETO, dado à mão, e é isso que deixa o Terraform do
+# cm-docs e do cm-analytics mexer na política IAM destes buckets. A E5 tira o papel
+# do projeto; este binding por bucket é o que fica.
+resource "google_storage_bucket_iam_member" "deployer_buckets_admin" {
+  for_each = toset([
+    "cm-docs-site",
+    "cm-analytics-dbt-docs-site",
+    "cm-ventures-core-analytics-staging",
+  ])
+  bucket = each.value
+  role   = "roles/storage.admin"
+  member = "serviceAccount:${google_service_account.deployer.email}"
+}
+
 # --- SA read-only de observabilidade (rotina Ops semanal — CMV-319) ---
 # Sem chave JSON: a rotina assume esta SA via impersonation
 # (gcloud --impersonate-service-account) a partir da identidade local listada em
@@ -233,6 +292,75 @@ resource "google_service_account_iam_member" "ops_observer_token_creator" {
   service_account_id = google_service_account.ops_observer.name
   role               = "roles/iam.serviceAccountTokenCreator"
   member             = each.value
+}
+
+# --- Leitura do Backoffice no core (cm-infra#73) ---
+# Os papéis abaixo foram dados à mão quando o Backoffice nasceu e entram aqui por
+# import (bootstrap/imports.tf), COMO ESTÃO: o cloudscheduler.admin de prod não é
+# rebaixado agora (pergunta aberta no #70: só vira viewer se a frente do Backoffice
+# confirmar que nenhuma onda dispara rotina). As SAs são criadas pelo Terraform do
+# cm-backoffice; aqui mora só o que elas podem no projeto.
+#
+# iam.securityReviewer (prod) é novo: a tela "Permissões" do Backoffice (E10) lê as
+# políticas de IAM. logging.viewer já existia e só é importado.
+locals {
+  backoffice_papeis = {
+    "cm-backoffice-run" = [
+      "roles/cloudscheduler.admin",
+      "roles/iam.securityReviewer",
+      "roles/logging.viewer",
+      "roles/run.viewer",
+    ]
+    "cm-backoffice-hom-run" = [
+      "roles/cloudscheduler.viewer",
+      "roles/logging.viewer",
+      "roles/run.viewer",
+    ]
+  }
+}
+
+resource "google_project_iam_member" "backoffice_leitura" {
+  for_each = merge([
+    for sa, papeis in local.backoffice_papeis : {
+      for papel in papeis : "${sa} ${papel}" => { sa = sa, papel = papel }
+    }
+  ]...)
+  project = var.project_id
+  role    = each.value.papel
+  member  = "serviceAccount:${each.value.sa}@${var.project_id}.iam.gserviceaccount.com"
+}
+
+# --- bigquery.jobUser das SAs do armazém (cm-infra#73) ---
+# Hoje declarados no cm-analytics (terraform/bigquery.tf, warehouse_pipeline_job_user
+# e warehouse_metabase_job_user), o único motivo para o deployer ainda precisar de
+# projectIamAdmin. Entram aqui por import; o cm-analytics solta os dois do state dele
+# com `removed { lifecycle { destroy = false } }` (etapa seguinte do #70). Até lá os
+# dois states declaram o mesmo membro — inofensivo, porque _iam_member é aditivo.
+resource "google_project_iam_member" "armazem_job_user" {
+  for_each = toset([
+    "analytics-bq-pipeline",
+    "analytics-bq-metabase",
+  ])
+  project = var.project_id
+  role    = "roles/bigquery.jobUser"
+  member  = "serviceAccount:${each.value}@${var.project_id}.iam.gserviceaccount.com"
+}
+
+# --- Leitura cruzada de secrets do core (cm-infra#73) ---
+# SAs de outros projetos (MD e bjj) que leem secrets do core: a chave de
+# introspecção e a chave da org MD no identity. Concedidas à mão; entram aqui por
+# import. Só secretAccessor: o secretmanager.admin cruzado que algumas SAs de deploy
+# de fora têm nesses secrets NÃO é declarado aqui (sai na E5 do #70).
+resource "google_secret_manager_secret_iam_member" "leitura_cruzada" {
+  for_each = merge([
+    for secret, membros in var.secrets_leitores_externos : {
+      for membro in membros : "${secret} ${membro}" => { secret = secret, membro = membro }
+    }
+  ]...)
+  project   = var.project_id
+  secret_id = each.value.secret
+  role      = "roles/secretmanager.secretAccessor"
+  member    = each.value.membro
 }
 
 # --- BigQuery: logs de tool call do cm-mcp/md-mcp (CMV-594, filha de CMV-593) ---

@@ -60,3 +60,13 @@ variable "retencao_dry_run" {
   type        = bool
   default     = true
 }
+
+variable "secrets_leitores_externos" {
+  description = <<-EOT
+    Leitura cruzada de secrets do core: nome curto do secret (neste projeto) => members IAM de
+    outros projetos com roles/secretmanager.secretAccessor nele (cm-infra#73). Só leitura; admin
+    cruzado não entra aqui.
+  EOT
+  type        = map(list(string))
+  default     = {}
+}

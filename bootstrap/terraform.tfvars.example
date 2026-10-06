@@ -17,21 +17,23 @@ state_bucket_name = "cm-ventures-core-tfstate"
 
 # Repos autorizados a assumir a SA de deploy via Workload Identity Federation.
 #
-# ATENCAO: esta lista reproduz o STATE, nao a realidade inteira. Tres repos
-# — cm-analytics, cm-billing e cm-docs — tiveram o binding criado a mao com
-# `gcloud iam service-accounts add-iam-policy-binding` e vivem fora do
-# Terraform. Um apply NAO os revoga (google_service_account_iam_member e
-# aditivo, nao autoritativo), por isso o plan fecha em "No changes" mesmo
-# assim. Mas eles sao infra nao declarada: se o binding sumir, ninguem
-# descobre pelo codigo. Trazer os tres para ca e uma mudanca a parte, com
-# plan proprio (vai aparecer como "3 to add", adotando o que ja existe).
+# cm-analytics, cm-billing e cm-docs tiveram o binding criado a mao com
+# `gcloud iam service-accounts add-iam-policy-binding`. Entraram nesta lista
+# em cm-infra#73, junto de um `import {}` em imports.tf: o plan os adota sem
+# mudar nada na nuvem. cm-backoffice e cm-backoffice-frontend ja estavam no
+# state (02/10 e 06/10) e faltavam aqui.
 #
 # Conferir a realidade com:
 #   gcloud iam service-accounts get-iam-policy \
 #     github-deployer-prod@cm-ventures-core.iam.gserviceaccount.com \
 #     --project=cm-ventures-core
 github_repositories = [
+  "cm-tech-ventures/cm-analytics",
+  "cm-tech-ventures/cm-backoffice",
+  "cm-tech-ventures/cm-backoffice-frontend",
+  "cm-tech-ventures/cm-billing",
   "cm-tech-ventures/cm-crm",
+  "cm-tech-ventures/cm-docs",
   "cm-tech-ventures/cm-identity",
   "cm-tech-ventures/cm-infra",
   "cm-tech-ventures/cm-mcp",
@@ -51,6 +53,35 @@ billing_account_id = "013EE2-6E67DB-A423CD"
 mcp_logs_external_sink_writer_identities = [
   "serviceAccount:service-407283246579@gcp-sa-logging.iam.gserviceaccount.com",
 ]
+
+# Leitura cruzada de secrets do core por SAs do MD e do bjj (cm-infra#73).
+# Concedidas a mao; importadas em imports.tf. Ficaram DE FORA, de proposito,
+# os secretmanager.admin cruzados nos mesmos secrets (saem na E5 do #70):
+#   identity-introspection-core-key:     implantacao-homolog@md-hom, sys-bjj-mcp-deploy@bjj-system
+#   identity-hom-introspection-core-key: implantacao-homolog@md-hlg, sys-bjj-mcp-deploy@bjj-system
+#
+# Conferir com:
+#   gcloud secrets get-iam-policy <secret> --project=cm-ventures-core
+secrets_leitores_externos = {
+  "identity-introspection-core-key" = [
+    "serviceAccount:implantacao-homolog@md-hom.iam.gserviceaccount.com",
+    "serviceAccount:implantacao-prod@md-prd-490503.iam.gserviceaccount.com",
+    "serviceAccount:md-mcp-run@md-hom.iam.gserviceaccount.com",
+    "serviceAccount:sys-bjj-mcp-run@bjj-system.iam.gserviceaccount.com",
+  ]
+  "identity-hom-introspection-core-key" = [
+    "serviceAccount:implantacao-homolog@md-hlg.iam.gserviceaccount.com",
+    "serviceAccount:md-mcp-run@md-hlg.iam.gserviceaccount.com",
+    "serviceAccount:sys-bjj-mcp-hom-run@bjj-system.iam.gserviceaccount.com",
+  ]
+  "identity-org-meus-dredinhos-api-key" = [
+    "serviceAccount:implantacao-homolog@md-hom.iam.gserviceaccount.com",
+    "serviceAccount:implantacao-prod@md-prd-490503.iam.gserviceaccount.com",
+  ]
+  "identity-hom-org-meus-dredinhos-api-key" = [
+    "serviceAccount:implantacao-homolog@md-hlg.iam.gserviceaccount.com",
+  ]
+}
 
 # Retenção do Artifact Registry: false = apaga de verdade.
 #
