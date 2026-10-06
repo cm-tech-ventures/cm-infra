@@ -30,7 +30,8 @@ limites do free-tier (storage, banda, etc).
 
 ## Adicionar um novo banco à lista
 
-1. Obter o DSN Postgres (connection string) do projeto Supabase.
+1. Obter o DSN Postgres (connection string) do projeto Supabase. Preferir o
+   pooler e conferir se o host é `aws-0` ou `aws-1` (ver "Cuidado" abaixo).
 2. Atualizar o secret `keepalive-db-dsns` no Secret Manager do projeto
    `cm-ventures-core`, concatenando o novo DSN com `;`:
    ```
@@ -38,15 +39,47 @@ limites do free-tier (storage, banda, etc).
      --data-file=- <<< "$DSN_EXISTENTE;$DSN_NOVO"
    ```
 3. Nenhuma mudança de Terraform é necessária — o job lê o secret em runtime.
-4. Registrar a posse do projeto Supabase em `docs/supabase-projects.md`.
+4. Registrar a posse do projeto Supabase em `docs/supabase-projects.md` e
+   incluir o banco na tabela "Bancos cobertos hoje" abaixo.
 
-Hoje a lista cobre o banco dos cores (`cm-ventures-core`, projeto
-Supabase único para cm-identity/cm-crm/etc — mesmo host, schemas
-diferentes) e o banco do `sys-bjj-backend` (projeto `bjj-system`, DSN lido do
-secret `sys-bjj-backend-database-url` desse projeto e adicionado em
-2026-07-29 — [CMV-297](/CMV/issues/CMV-297), 3º incidente de pausa por
-free-tier). O banco do `backend-md` (md-hom) entra assim que a transferência
-de organização em [CMV-54](/CMV/issues/CMV-54) for concluída.
+## Bancos cobertos hoje
+
+Lista do secret `keepalive-db-dsns` (cm-ventures-core) a partir da versão 7,
+de 06/10/2026: 6 DSNs. Aqui ficam só o ref e o host. Usuário e senha ficam
+apenas no secret.
+
+| Project ref | Sistema | Conexão | Desde |
+|---|---|---|---|
+| `uooowvvrblslwszmcghp` | cores em produção: Supabase `cm-ventures-core` (identity, billing, crm…) | pooler `aws-1` | antes da v7 |
+| `aoriyfujsilisrrvadxy` | `sys-bjj-backend` (bjj-system) | direta, `db.<ref>.supabase.co` | 2026-07-29 ([CMV-297](/CMV/issues/CMV-297)) |
+| `pmbgbvmwwiezajsveswv` | sys-bjj homologação: Supabase `bjj-system-hom` | pooler `aws-0` | antes da v7 |
+| `iimjsfqodjeybzdwjowz` | cores em homologação: Supabase `cm-ventures-core-hom` (identity-hom, billing-hom) | pooler `aws-0` | antes da v7 |
+| `jwyjqiezwjccnxrbmlai` | MD produção: Supabase `md-backend`, servido pelo GCP `md-hom` | pooler `aws-1-sa-east-1`, porta 5432 | 2026-10-06 (v7) |
+| `ajjlyugjutltxyepzbhk` | MD homologação: Supabase `md-backend-prod`, ligado ao GCP `md-hlg` | pooler `aws-1-sa-east-1`, porta 5432 | 2026-10-06 (v7) |
+
+O banco dos cores (`cm-ventures-core`) é um projeto Supabase só, usado por
+cm-identity, cm-crm e os outros cores: mesmo host, schemas diferentes. O
+mesmo vale para o `cm-ventures-core-hom` em homologação. Nomes conferidos no
+inventário da API do Supabase (24/09 e 05/10/2026).
+
+Os dois bancos do MD entraram pela etapa
+[cm-infra#59](https://github.com/cm-tech-ventures/cm-infra/issues/59), parte
+da virada de ambientes do MD
+([md-backend#308](https://github.com/cadusds2/md-backend/issues/308)). O
+`md-backend-prod` pausava sozinho justamente por estar fora desta lista. O
+nome engana: ele é a homologação nova do MD, não a produção.
+
+### Cuidado: o pooler pode ser `aws-0` ou `aws-1`, conferir por projeto
+
+O host do pooler muda de projeto para projeto, mesmo na mesma região. Os dois
+bancos do MD só respondem pelo `aws-1-sa-east-1.pooler.supabase.com`. Pelo
+`aws-0`, a resposta é `tenant/user not found`, que parece erro de senha mas é
+host errado. Antes de pôr um DSN novo no secret:
+
+1. Pegar o host certo no dashboard do projeto (Connect → Session pooler), sem
+   supor pelo host dos outros projetos.
+2. Testar com `psql "<dsn>" -c 'select 1'`.
+3. O usuário do pooler tem o formato `postgres.<ref>`.
 
 ### Cuidado: connection string direta (`db.<ref>.supabase.co`) some do DNS durante a pausa
 
