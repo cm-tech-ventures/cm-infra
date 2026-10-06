@@ -90,3 +90,13 @@ variable "invoker_service_account" {
   type        = string
   default     = ""
 }
+
+variable "deletion_protection" {
+  description = <<-EOT
+    Trava de exclusão do job no Terraform (atributo do provider, não da API). Com
+    true, um `terraform destroy` ou a remoção do módulo falha. Default true, o mesmo
+    do provider: só passe false num apply anterior à remoção do job.
+  EOT
+  type        = bool
+  default     = true
+}

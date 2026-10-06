@@ -59,7 +59,9 @@ resource "google_storage_bucket" "site" {
   name                        = "${var.name}-site"
   location                    = var.region
   uniform_bucket_level_access = true
-  force_destroy               = false
+  # Default false: o bucket guarda as versões publicadas do site. true só num
+  # apply anterior à remoção do site, senão o destroy falha com objetos dentro.
+  force_destroy = var.force_destroy
 
   # Sem acesso público: nenhum membro "allUsers"/"allAuthenticatedUsers" é
   # concedido em nenhum lugar deste módulo. O único caminho de leitura é via
@@ -130,6 +132,9 @@ resource "google_cloud_run_v2_service" "proxy" {
   name     = "${var.name}-site-proxy"
   location = var.region
   ingress  = "INGRESS_TRAFFIC_ALL"
+
+  # Trava do provider (só existe no state). Default true, igual ao do provider.
+  deletion_protection = var.deletion_protection
 
   template {
     service_account = google_service_account.proxy.email
