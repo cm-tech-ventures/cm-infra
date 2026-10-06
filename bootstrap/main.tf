@@ -279,14 +279,18 @@ resource "google_bigquery_dataset_iam_member" "mcp_logs_sink_writer" {
   member     = google_logging_project_sink.mcp_tool_calls.writer_identity
 }
 
-# SA do pipeline dbt do cm-analytics (analytics-pipeline-job@...) — leitura para
-# declarar a source no staging, sem poder de escrita sobre o dataset de logs.
-resource "google_bigquery_dataset_iam_member" "mcp_logs_dbt_reader" {
-  project    = var.project_id
-  dataset_id = google_bigquery_dataset.mcp_logs.dataset_id
-  role       = "roles/bigquery.dataViewer"
-  member     = "serviceAccount:${var.dbt_pipeline_service_account}"
-}
+# REMOVIDO em 06/10/2026: havia aqui um `mcp_logs_dbt_reader` dando
+# bigquery.dataViewer no raw_mcp_logs à SA do pipeline dbt do cm-analytics
+# (analytics-pipeline-job@). Essa SA **não existe mais** — foi embora com o
+# analytics antigo, removido pela Plataforma de dados no mesmo dia.
+#
+# O bloco nunca chegou a ser aplicado, e era a razão de todo `plan` do bootstrap
+# nascer com "1 to add" pendente para quem quer que fosse aplicar. Provado por
+# apply real: o Google recusou com
+#   "Service account analytics-pipeline-job@... does not exist"
+#
+# A variável `dbt_pipeline_service_account` continua declarada, sem uso, para o
+# caso de o pipeline voltar com outro nome; se ficar órfã por muito tempo, sai.
 
 # Writer identities de sinks cross-project (ex: md-hom/md-mcp, CMV-599) que também
 # gravam em raw_mcp_logs. Cloud Logging sinks são escopados ao projeto onde vivem
