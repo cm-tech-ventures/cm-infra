@@ -4,6 +4,18 @@
 
 locals {
   sa_account_id = substr("${var.job_name}-job", 0, 30)
+
+  # Variáveis que o cm_sdk.observabilidade lê para montar o envelope do log
+  # (service, env, version). O que o chamador puser em var.env ganha; vazio
+  # não vira variável (CM_VERSION sem sha some, em vez de sair "").
+  env_observabilidade = {
+    for nome, valor in {
+      CM_SERVICE = var.job_name
+      CM_ENV     = var.environment
+      CM_VERSION = var.versao
+    } : nome => valor if valor != ""
+  }
+  env = merge(local.env_observabilidade, var.env)
 }
 
 resource "google_service_account" "job" {
@@ -56,7 +68,7 @@ resource "google_cloud_run_v2_job" "job" {
         }
 
         dynamic "env" {
-          for_each = var.env
+          for_each = local.env
           content {
             name  = env.key
             value = env.value

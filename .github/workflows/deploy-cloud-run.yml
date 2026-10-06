@@ -146,6 +146,11 @@ jobs:
       - name: Terraform apply
         env:
           EXTRA_TFVARS: ${{ inputs.extra-tfvars }}
+          # Sha do commit do chamador, para o CM_VERSION do log estruturado
+          # (cm_sdk.observabilidade). Vai por TF_VAR_ e não por -var de
+          # propósito: o Terraform ignora TF_VAR_ de variável não declarada,
+          # então main.tf que ainda não declara `versao` segue funcionando.
+          TF_VAR_versao: ${{ github.sha }}
           EXTRA_TFVARS_SECRET: ${{ secrets.EXTRA_TFVARS_SECRET }}
         run: |
           extra_args=()
