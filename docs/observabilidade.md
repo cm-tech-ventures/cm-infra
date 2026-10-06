@@ -81,8 +81,7 @@ Não é mais opt-in por serviço. Existe **um sink por projeto GCP**, gerido no
 state `environments/log-sinks` com o módulo `modules/log-sink-bigquery`, e
 todos gravam no mesmo dataset `cm-ventures-core.bronze_logs` (que é do Terraform
 do cm-analytics; camada bronze da plataforma de dados). Até o cm-infra#57 o
-destino era o `raw_logs`; o nome dos sinks (`eventos-para-raw-logs`) ficou,
-porque trocar o nome recria o sink. O serviço não declara nada: basta emitir o envelope do
+destino era o `raw_logs` e os sinks se chamavam `eventos-para-raw-logs`. O serviço não declara nada: basta emitir o envelope do
 `cm_sdk.observabilidade` no stdout com `env="prod"`.
 
 - Filtro: Cloud Run (serviço ou job) + `jsonPayload.event:*` +
@@ -97,9 +96,9 @@ porque trocar o nome recria o sink. O serviço não declara nada: basta emitir o
 
 | Projeto | Sink | Estado |
 | --- | --- | --- |
-| cm-ventures-core | `eventos-para-raw-logs` | neste state (cm-infra#55) |
-| md-hom | `eventos-para-raw-logs` | neste state |
-| bjj-system | `eventos-para-raw-logs` | neste state |
+| cm-ventures-core | `eventos-para-bronze-logs` | neste state (cm-infra#55, #57) |
+| md-hom | `eventos-para-bronze-logs` | neste state |
+| bjj-system | `eventos-para-bronze-logs` | neste state |
 
 **Credencial:** um state só e uma conta só (`cm.tech.ventures@gmail.com`). A
 conta dona do md-hom e a do bjj-system concederam à conta do core, uma vez e à

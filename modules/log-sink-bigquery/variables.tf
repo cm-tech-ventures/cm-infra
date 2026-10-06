@@ -4,11 +4,9 @@ variable "project_id" {
 }
 
 variable "nome" {
-  # O nome ficou da época do raw_logs (cm-infra#55/#56). Trocar o nome recria o
-  # sink e abre uma janela sem gravação; a troca do destino é in-place.
-  description = "Nome do sink no projeto de origem."
+  description = "Nome do sink no projeto de origem. Trocar o nome recria o sink."
   type        = string
-  default     = "eventos-para-raw-logs"
+  default     = "eventos-para-bronze-logs"
 }
 
 variable "descricao" {
