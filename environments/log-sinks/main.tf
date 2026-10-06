@@ -1,4 +1,5 @@
-# Sinks de eventos estruturados para o raw_logs do cm-ventures-core.
+# Sinks de eventos estruturados para o bronze_logs do cm-ventures-core (camada
+# bronze da plataforma de dados; até cm-infra#57 o destino era o raw_logs).
 #
 # Estado próprio, fora do bootstrap: o bootstrap tem drift conhecido e não se
 # aplica. O sink antigo do MCP (cm-mcp-tool-calls-to-bq, no bootstrap) segue
@@ -7,7 +8,7 @@
 # Um sink por projeto: sink só enxerga os logs do projeto onde vive. A conta
 # que aplica este state (cm.tech.ventures) tem roles/logging.configWriter no
 # md-hom e no bjj-system, concedido à mão pela conta dona de cada um (ver
-# docs/observabilidade.md, seção "Sinks para o raw_logs"). A IAM da writer
+# docs/observabilidade.md, seção "Sinks para o bronze_logs"). A IAM da writer
 # identity cai sempre no dataset do core.
 
 module "sink_core" {

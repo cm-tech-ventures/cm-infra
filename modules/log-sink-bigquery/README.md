@@ -1,6 +1,6 @@
 # log-sink-bigquery
 
-Leva os eventos estruturados de **um projeto GCP** para o dataset `raw_logs`
+Leva os eventos estruturados de **um projeto GCP** para o dataset `bronze_logs`
 do `cm-ventures-core`, pelo Cloud Logging. É a peça "sinks" da plataforma de
 dados (fase 4, logs estruturados).
 
@@ -38,7 +38,7 @@ O Logging decide o nome da tabela a partir do **log id** de origem. O
 `cm_sdk.observabilidade` escreve no stdout, então a tabela sai sempre:
 
 ```
-cm-ventures-core.raw_logs.run_googleapis_com_stdout
+cm-ventures-core.bronze_logs.run_googleapis_com_stdout
 ```
 
 Não há opção no sink para trocar esse nome. Com `use_partitioned_tables = true`

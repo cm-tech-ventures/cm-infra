@@ -4,15 +4,15 @@ variable "project_id" {
 }
 
 variable "nome" {
-  description = "Nome do sink no projeto de origem."
+  description = "Nome do sink no projeto de origem. Trocar o nome recria o sink."
   type        = string
-  default     = "eventos-para-raw-logs"
+  default     = "eventos-para-bronze-logs"
 }
 
 variable "descricao" {
   description = "Descrição do sink, visível no console do Logging."
   type        = string
-  default     = "Eventos estruturados (cm_sdk.observabilidade) com env=prod para o raw_logs do cm-ventures-core. Gerido pelo cm-infra (environments/log-sinks)."
+  default     = "Eventos estruturados (cm_sdk.observabilidade) com env=prod para o bronze_logs do cm-ventures-core. Gerido pelo cm-infra (environments/log-sinks)."
 }
 
 variable "dataset_project_id" {
@@ -24,7 +24,7 @@ variable "dataset_project_id" {
 variable "dataset_id" {
   description = "Id do dataset de destino. Ele precisa existir: é lido por data source, não criado."
   type        = string
-  default     = "raw_logs"
+  default     = "bronze_logs"
 }
 
 variable "filtro" {

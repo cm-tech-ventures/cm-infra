@@ -1,5 +1,5 @@
 # Sink do Cloud Logging que leva os eventos estruturados (envelope do
-# cm_sdk.observabilidade) de UM projeto para o dataset raw_logs do
+# cm_sdk.observabilidade) de UM projeto para o dataset bronze_logs do
 # cm-ventures-core. Um sink por projeto: sink só enxerga os logs do projeto
 # onde vive.
 #
