@@ -183,6 +183,7 @@ core (ex: `cm-analytics`), não gerenciada por este módulo — o
 | `project_id` | Projeto GCP |
 | `region` | Região do bucket e do Cloud Run |
 | `runtime_service_account_email` | SA do job de publicação (write no bucket) |
+| `deployer_service_account` | SA de deploy (WIF) que recebe `iam.serviceAccountUser` na SA do proxy. Vazio = não concede |
 | `proxy_image` | Imagem do container upstream (leitor do bucket) |
 | `proxy_internal_port` | Porta interna (localhost) do container `proxy` (default `8081`) |
 | `proxy_max_instances` | Máximo de instâncias do serviço (min é sempre 0) |

@@ -88,6 +88,16 @@ resource "google_service_account" "proxy" {
   display_name = "Proxy read-only do site estático ${var.name} (GCS -> HTTP)"
 }
 
+# A SA de deploy (WIF) precisa de actAs sobre a SA do proxy para fazer deploy
+# do Cloud Run acima. Mesmo padrão do deployer_act_as do cloud-run-service:
+# binding na própria SA, sem serviceAccountUser no projeto inteiro.
+resource "google_service_account_iam_member" "deployer_act_as" {
+  count              = var.deployer_service_account != "" ? 1 : 0
+  service_account_id = google_service_account.proxy.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${var.deployer_service_account}"
+}
+
 resource "google_storage_bucket_iam_member" "proxy_reader" {
   bucket = google_storage_bucket.site.name
   role   = "roles/storage.objectViewer"
