@@ -27,6 +27,8 @@ environments/          # instâncias com state próprio
   keepalive/           # keep-alive dos bancos Supabase free-tier
   alertas-core/        # alertas de rotina do cm-ventures-core (catálogo em YAML)
   alertas-bjj/         # idem, projeto bjj-system (outra conta GCP, outro state)
+  log-sinks/           # sinks de eventos dos 3 projetos para o bronze_logs
+  billing-export-acesso/  # leitura no billing_export (export de faturamento, fora de TF)
 docs/                  # padrões da casa — ler antes de criar recurso novo
 .github/workflows/     # reusable workflows (workflow_call)
   django-ci.yml        # ruff + pytest + contrato OpenAPI (spectacular diff)
