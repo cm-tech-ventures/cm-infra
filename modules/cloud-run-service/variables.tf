@@ -46,6 +46,8 @@ variable "secrets" {
     Map nome-da-env => referência ao Secret Manager. Injetado via secret_key_ref;
     nenhum valor literal entra no TF state.
     Ex: { DATABASE_URL = { secret = "cm-identity-database-url", version = "latest" } }
+    Secret de outro projeto: resource id completo, ex.
+    { secret = "projects/cm-ventures-core/secrets/identity-introspection-core-key" }.
   EOT
   type = map(object({
     secret  = string
