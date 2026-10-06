@@ -75,17 +75,19 @@ use nenhum dos dois**: `org_id` é identificador de cliente e `request_id` é um
 valor por requisição, e qualquer um estoura a cota. Prefira rótulo de baixa
 cardinalidade (`path`, `tool`, `status`).
 
-## 3. Sinks para o raw_logs (Cloud Logging → BigQuery)
+## 3. Sinks para o bronze_logs (Cloud Logging → BigQuery)
 
 Não é mais opt-in por serviço. Existe **um sink por projeto GCP**, gerido no
 state `environments/log-sinks` com o módulo `modules/log-sink-bigquery`, e
-todos gravam no mesmo dataset `cm-ventures-core.raw_logs` (que é do Terraform
-do cm-analytics). O serviço não declara nada: basta emitir o envelope do
+todos gravam no mesmo dataset `cm-ventures-core.bronze_logs` (que é do Terraform
+do cm-analytics; camada bronze da plataforma de dados). Até o cm-infra#57 o
+destino era o `raw_logs`; o nome dos sinks (`eventos-para-raw-logs`) ficou,
+porque trocar o nome recria o sink. O serviço não declara nada: basta emitir o envelope do
 `cm_sdk.observabilidade` no stdout com `env="prod"`.
 
 - Filtro: Cloud Run (serviço ou job) + `jsonPayload.event:*` +
   `jsonPayload.env="prod"`. Homologação não vai para o BigQuery.
-- Tabela: sempre `raw_logs.run_googleapis_com_stdout`, particionada por dia.
+- Tabela: sempre `bronze_logs.run_googleapis_com_stdout`, particionada por dia.
   O nome não se escolhe; o nome legível nasce no dbt. Detalhes no README do
   módulo.
 - O sink antigo do MCP (`cm-mcp-tool-calls-to-bq` → `raw_mcp_logs`, no
