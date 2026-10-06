@@ -1,0 +1,197 @@
+# RETRATO, NÃO FONTE: ninguém edita este arquivo à mão — quem edita, edita no Backoffice.
+#
+# Por que ele existe: o banco do Backoffice está no Supabase do plano gratuito e
+# NÃO TEM BACKUP (risco assumido em 24/09/2026). Sem este retrato, se o banco
+# morrer perde-se o que rodava, quando, apontando para onde e com qual
+# autenticação — e "recriar o ambiente a partir do código" deixa de funcionar.
+#
+# A distinção que não pode se perder: o desenho de 1º/10/2026 descartou o
+# catálogo YAML como fonte e o gerador de Terraform a partir do banco,
+# justamente para a empresa ter UM dono de cada coisa. Se alguém começar a
+# editar este arquivo, o projeto volta a ter duas verdades. Nenhum `.tf` lê
+# este arquivo, e ele mora fora de `environments/` de propósito — ao contrário
+# de `environments/alertas-*/alertas.yaml`, que é fonte de verdade e é lido
+# pelo `main.tf` ao lado.
+#
+# Quem é dono de quê: o Google é dono de horário, estado e última tentativa; o
+# Backoffice é dono do enriquecimento (nome em português, dono, etiqueta) e do
+# registro de ação humana. Este arquivo é cópia dos dois, com data.
+#
+# Medido em: 06/10/2026
+# Medido por: `gcloud scheduler jobs list --location=southamerica-east1` nas duas
+#   contas — `cm.tech.ventures@gmail.com` (projeto cm-ventures-core) e
+#   `bjjsystem25@gmail.com` (projeto bjj-system). O bjj-system NÃO é visível
+#   pela conta do core: trocar de conta antes de concluir que não há acesso.
+# Varridas também us-central1, us-east1 e europe-west1: vazias.
+#
+# SÃO 7 AGENDAMENTOS, não os 13 do plano de 02/10. As 6 rotinas de BI foram
+# removidas pelos PRs #72/#73 do `cm-analytics` ("E2: remove o analytics
+# antigo"), já aplicados, e a `analytics-diario` que as substitui ainda não
+# existe. O 13º era a `keepalive-check-hom`, criada em 02/10 e presente aqui.
+# Isto é observação, não conserto: se o número voltar a 13, este retrato muda.
+#
+# campos:
+#   nome_job       id do agendamento no Cloud Scheduler
+#   nome_pt        como o Backoffice chama a rotina na tela
+#   projeto        projeto GCP; `conta` diz por qual conta gcloud ele é visível
+#   regiao         location do Cloud Scheduler
+#   cron / fuso    horário como o Google guarda
+#   estado         ENABLED | PAUSED, no momento da medição
+#   tipo_alvo      http_oidc           = POST direto no serviço, token OIDC
+#                  cloud_run_job_oauth = POST na Run Admin API (`:run`), token OAuth
+#   destino        A URL COMPLETA. Nunca montar por convenção: o sys-bjj usa
+#                  `/internal/tarefas/` em português e os cores usam
+#                  `/internal/tasks/`. A URL é dado.
+#   autenticacao   conta de serviço do disparo e, no OIDC, o audience
+#   retry          `retryCount` de hoje. A onda 4 padroniza retry zero para
+#                  rotina nova; estas são as de antes desse padrão.
+#   prazo          attemptDeadline
+#   etiqueta       consequência de pausar, como o Backoffice classifica
+#   terraform      onde o bloco ainda é declarado. Some conforme a onda 5
+#                  migra cada rotina para o Backoffice.
+
+- nome_job: billing-regua-diaria
+  nome_pt: Régua de cobrança
+  projeto: cm-ventures-core
+  conta: cm.tech.ventures@gmail.com
+  regiao: southamerica-east1
+  cron: "0 6 * * *"
+  fuso: America/Sao_Paulo
+  estado: ENABLED
+  ambiente: producao
+  tipo_alvo: http_oidc
+  metodo: POST
+  destino: https://billing-u3cw2dxooq-rj.a.run.app/internal/tasks/regua-diaria
+  autenticacao:
+    conta_de_servico: billing-run@cm-ventures-core.iam.gserviceaccount.com
+    audience: https://billing-u3cw2dxooq-rj.a.run.app/internal/tasks/regua-diaria
+  retry: 1
+  prazo: 300s
+  etiqueta: mexe_com_dinheiro
+  terraform: cm-billing/infra/main.tf
+
+- nome_job: billing-hom-regua-diaria
+  nome_pt: Régua de cobrança (homologação)
+  projeto: cm-ventures-core
+  conta: cm.tech.ventures@gmail.com
+  regiao: southamerica-east1
+  cron: "0 6 * * *"
+  fuso: America/Sao_Paulo
+  estado: ENABLED
+  ambiente: homologacao
+  tipo_alvo: http_oidc
+  metodo: POST
+  destino: https://billing-hom-u3cw2dxooq-rj.a.run.app/internal/tasks/regua-diaria
+  autenticacao:
+    conta_de_servico: billing-hom-run@cm-ventures-core.iam.gserviceaccount.com
+    audience: https://billing-hom-u3cw2dxooq-rj.a.run.app/internal/tasks/regua-diaria
+  retry: 1
+  prazo: 300s
+  etiqueta: sem_efeito_externo
+  terraform: cm-billing/infra/main.tf
+
+- nome_job: sys-bjj-backend-rotina-diaria
+  nome_pt: Rotina diária do sys-bjj
+  projeto: bjj-system
+  conta: bjjsystem25@gmail.com
+  regiao: southamerica-east1
+  cron: "30 3 * * *"
+  fuso: America/Sao_Paulo
+  estado: ENABLED
+  ambiente: producao
+  tipo_alvo: http_oidc
+  metodo: POST
+  # Em português, ao contrário dos cores. É o exemplo que proíbe convenção.
+  destino: https://sys-bjj-backend-enakiuubjq-rj.a.run.app/internal/tarefas/diaria
+  autenticacao:
+    conta_de_servico: sys-bjj-backend-deploy@bjj-system.iam.gserviceaccount.com
+    audience: https://sys-bjj-backend-enakiuubjq-rj.a.run.app/internal/tarefas/diaria
+  retry: 3
+  prazo: 180s
+  etiqueta: obrigacao_legal
+  terraform: sys-bjj-backend/infra/terraform/main.tf
+
+- nome_job: sys-bjj-backend-hom-rotina-diaria
+  nome_pt: Rotina diária do sys-bjj (homologação)
+  projeto: bjj-system
+  conta: bjjsystem25@gmail.com
+  regiao: southamerica-east1
+  cron: "30 3 * * *"
+  fuso: America/Sao_Paulo
+  estado: ENABLED
+  ambiente: homologacao
+  tipo_alvo: http_oidc
+  metodo: POST
+  destino: https://sys-bjj-backend-hom-enakiuubjq-rj.a.run.app/internal/tarefas/diaria
+  autenticacao:
+    conta_de_servico: sys-bjj-backend-hom-deploy@bjj-system.iam.gserviceaccount.com
+    audience: https://sys-bjj-backend-hom-enakiuubjq-rj.a.run.app/internal/tarefas/diaria
+  retry: 3
+  prazo: 180s
+  etiqueta: sem_efeito_externo
+  terraform: sys-bjj-backend/infra/terraform/main.tf
+
+- nome_job: keepalive-check
+  nome_pt: Ping dos bancos
+  projeto: cm-ventures-core
+  conta: cm.tech.ventures@gmail.com
+  regiao: southamerica-east1
+  cron: "0 6 */3 * *"
+  fuso: America/Sao_Paulo
+  estado: ENABLED
+  ambiente: producao
+  tipo_alvo: cloud_run_job_oauth
+  metodo: POST
+  destino: https://southamerica-east1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/cm-ventures-core/jobs/keepalive-check:run
+  autenticacao:
+    conta_de_servico: keepalive-scheduler@cm-ventures-core.iam.gserviceaccount.com
+    escopo: https://www.googleapis.com/auth/cloud-platform
+  retry: 1
+  prazo: 320s
+  etiqueta: sem_efeito_externo
+  terraform: cm-infra/environments/keepalive/main.tf
+
+- nome_job: keepalive-check-hom
+  nome_pt: Ping dos bancos (homologação)
+  projeto: cm-ventures-core
+  conta: cm.tech.ventures@gmail.com
+  regiao: southamerica-east1
+  # 1h depois do de produção de propósito: no mesmo minuto um "disparar agora"
+  # ficaria indistinguível do disparo automático.
+  cron: "0 7 */3 * *"
+  fuso: America/Sao_Paulo
+  estado: ENABLED
+  ambiente: homologacao
+  # A única `cloud_run_job_oauth` de homologação — é por ela que a onda 4 se
+  # testa sem tocar produção.
+  tipo_alvo: cloud_run_job_oauth
+  metodo: POST
+  destino: https://southamerica-east1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/cm-ventures-core/jobs/keepalive-check-hom:run
+  autenticacao:
+    conta_de_servico: keepalive-hom-scheduler@cm-ventures-core.iam.gserviceaccount.com
+    escopo: https://www.googleapis.com/auth/cloud-platform
+  retry: 1
+  prazo: 320s
+  etiqueta: sem_efeito_externo
+  terraform: cm-infra/environments/keepalive-hom/main.tf
+
+- nome_job: crm-sync-template-approvals
+  nome_pt: Aprovação de modelos de WhatsApp
+  projeto: cm-ventures-core
+  conta: cm.tech.ventures@gmail.com
+  regiao: southamerica-east1
+  cron: "*/30 * * * *"
+  fuso: America/Sao_Paulo
+  # Pausada de propósito: a conta Meta do WhatsApp ainda está em construção.
+  estado: PAUSED
+  ambiente: producao
+  tipo_alvo: http_oidc
+  metodo: POST
+  destino: https://crm-u3cw2dxooq-rj.a.run.app/internal/tasks/sync-template-approvals
+  autenticacao:
+    conta_de_servico: crm-run@cm-ventures-core.iam.gserviceaccount.com
+    audience: https://crm-u3cw2dxooq-rj.a.run.app/internal/tasks/sync-template-approvals
+  retry: 1
+  prazo: 300s
+  etiqueta: sem_efeito_externo
+  terraform: cm-crm/infra/main.tf
