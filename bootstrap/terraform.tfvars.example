@@ -44,6 +44,10 @@ github_repositories = [
 # Quem pode assumir a SA cm-ops-observer por impersonation (CMV-319).
 ops_observer_impersonators = ["user:cm.tech.ventures@gmail.com"]
 
+# Quem pode assumir a SA analytics-bq-metabase (Metabase local, plataforma de
+# dados fase 3). Binding na SA, não no projeto.
+metabase_impersonators = ["user:cm.tech.ventures@gmail.com"]
+
 # Billing account do core, para conceder roles/billing.viewer à cm-ops-observer.
 billing_account_id = "013EE2-6E67DB-A423CD"
 

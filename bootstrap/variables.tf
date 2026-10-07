@@ -36,6 +36,12 @@ variable "ops_observer_impersonators" {
   default     = []
 }
 
+variable "metabase_impersonators" {
+  description = "Identidades (formato IAM member) com roles/iam.serviceAccountTokenCreator só na SA analytics-bq-metabase, para o Metabase local da plataforma de dados (fase 3)."
+  type        = list(string)
+  default     = ["user:cm.tech.ventures@gmail.com"]
+}
+
 variable "billing_account_id" {
   description = "ID da billing account (formato XXXXXX-XXXXXX-XXXXXX) para conceder roles/billing.viewer à SA cm-ops-observer. Vazio pula o grant (CMV-319)."
   type        = string
