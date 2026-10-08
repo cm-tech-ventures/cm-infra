@@ -349,6 +349,16 @@ resource "google_project_iam_member" "armazem_job_user" {
   member  = "serviceAccount:${each.value}@${var.project_id}.iam.gserviceaccount.com"
 }
 
+# --- Metabase local impersona a analytics-bq-metabase (plataforma de dados, fase 3) ---
+# A org bloqueia chave de SA, então o Metabase local usa impersonation. Binding NA SA,
+# nunca no projeto: a pessoa só lê o que a SA lê.
+resource "google_service_account_iam_member" "metabase_token_creator" {
+  for_each           = toset(var.metabase_impersonators)
+  service_account_id = "projects/${var.project_id}/serviceAccounts/analytics-bq-metabase@${var.project_id}.iam.gserviceaccount.com"
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = each.value
+}
+
 # --- Leitura cruzada de secrets do core (cm-infra#73) ---
 # SAs de outros projetos (MD e bjj) que leem secrets do core: a chave de
 # introspecção e a chave da org MD no identity. Concedidas à mão; entram aqui por
