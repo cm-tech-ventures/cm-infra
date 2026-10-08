@@ -463,6 +463,8 @@ module "artifact_registry" {
     "analytics-dashboard-proxy",
     "analytics-pipeline",
     "billing",
+    "cm-backoffice",
+    "cm-backoffice-frontend",
     "cm-mcp",
     "crm",
     "identity",
