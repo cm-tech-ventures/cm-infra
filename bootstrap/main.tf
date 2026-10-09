@@ -110,8 +110,10 @@ resource "google_service_account_iam_member" "wif_binding" {
 # dado de dataset nenhum. Quem cria o dataset vira OWNER dele, e isso basta para o
 # deploy dar as permissões por dataset (google_bigquery_dataset_iam_member) — sem
 # abrir billing_export nem raw_mcp_logs.
-resource "google_project_iam_member" "deployer_roles" {
-  for_each = toset([
+#
+# A lista mora num local porque a SA de ensaio (ensaio.tf) recebe os mesmos papéis.
+locals {
+  deployer_papeis_projeto = [
     "roles/run.admin",
     "roles/artifactregistry.writer",
     "roles/bigquery.user",
@@ -119,10 +121,14 @@ resource "google_project_iam_member" "deployer_roles" {
     "roles/logging.configWriter",
     "roles/monitoring.alertPolicyEditor",
     "roles/monitoring.notificationChannelEditor",
-  ])
-  project = var.project_id
-  role    = each.value
-  member  = "serviceAccount:${google_service_account.deployer.email}"
+  ]
+}
+
+resource "google_project_iam_member" "deployer_roles" {
+  for_each = toset(local.deployer_papeis_projeto)
+  project  = var.project_id
+  role     = each.value
+  member   = "serviceAccount:${google_service_account.deployer.email}"
 }
 
 # secretmanager.viewer não é suficiente: o módulo cloud-run-service cria bindings IAM
@@ -144,9 +150,9 @@ resource "google_project_iam_member" "deployer_secretmanager_admin" {
   member  = "serviceAccount:${google_service_account.deployer.email}"
 
   condition {
-    title       = "core-secrets-only"
-    description = "Admin restrito aos secrets padrão dos cores (database-url, django-secret-key, twilio-auth-token, identity-introspection-core-key)."
-    expression  = "resource.name.startsWith(\"projects/${data.google_project.current.number}/secrets/\") && (resource.name.endsWith(\"-database-url\") || resource.name.endsWith(\"-django-secret-key\") || resource.name.endsWith(\"-twilio-auth-token\") || resource.name.endsWith(\"/identity-introspection-core-key\"))"
+    title       = local.deployer_secrets_condicoes["core-secrets-only"].title
+    description = local.deployer_secrets_condicoes["core-secrets-only"].description
+    expression  = local.deployer_secrets_condicoes["core-secrets-only"].expression
   }
 }
 
@@ -191,9 +197,27 @@ resource "google_project_iam_member" "deployer_secretmanager_admin_extra" {
   member  = "serviceAccount:${google_service_account.deployer.email}"
 
   condition {
-    title       = "core-secrets-extra"
-    description = "Admin nos secrets de deploy fora da core-secrets-only: Asaas do billing, OAuth/Resend do identity, chave de introspecção de hom, OAuth do IAP e analytics-md-db-url (cm-infra#73)."
-    expression  = join(" || ", [for p in local.deployer_secrets_extra : "resource.name.startsWith(\"${local.secrets_prefixo}${p}\")"])
+    title       = local.deployer_secrets_condicoes["core-secrets-extra"].title
+    description = local.deployer_secrets_condicoes["core-secrets-extra"].description
+    expression  = local.deployer_secrets_condicoes["core-secrets-extra"].expression
+  }
+}
+
+# As duas condições de secretmanager.admin do deployer, num lugar só: a SA de ensaio
+# (ensaio.tf) recebe as mesmas, com o mesmo texto. Mudar aqui muda as duas contas
+# (e força REPLACE dos bindings, ver acima).
+locals {
+  deployer_secrets_condicoes = {
+    "core-secrets-only" = {
+      title       = "core-secrets-only"
+      description = "Admin restrito aos secrets padrão dos cores (database-url, django-secret-key, twilio-auth-token, identity-introspection-core-key)."
+      expression  = "resource.name.startsWith(\"projects/${data.google_project.current.number}/secrets/\") && (resource.name.endsWith(\"-database-url\") || resource.name.endsWith(\"-django-secret-key\") || resource.name.endsWith(\"-twilio-auth-token\") || resource.name.endsWith(\"/identity-introspection-core-key\"))"
+    }
+    "core-secrets-extra" = {
+      title       = "core-secrets-extra"
+      description = "Admin nos secrets de deploy fora da core-secrets-only: Asaas do billing, OAuth/Resend do identity, chave de introspecção de hom, OAuth do IAP e analytics-md-db-url (cm-infra#73)."
+      expression  = join(" || ", [for p in local.deployer_secrets_extra : "resource.name.startsWith(\"${local.secrets_prefixo}${p}\")"])
+    }
   }
 }
 
@@ -249,15 +273,19 @@ resource "google_storage_bucket_iam_member" "deployer_state" {
 # tem storage.admin no PROJETO, dado à mão, e é isso que deixa o Terraform do
 # cm-docs e do cm-analytics mexer na política IAM destes buckets. A E5 tira o papel
 # do projeto; este binding por bucket é o que fica.
-resource "google_storage_bucket_iam_member" "deployer_buckets_admin" {
-  for_each = toset([
+locals {
+  deployer_buckets_admin = [
     "cm-docs-site",
     "cm-analytics-dbt-docs-site",
     "cm-ventures-core-analytics-staging",
-  ])
-  bucket = each.value
-  role   = "roles/storage.admin"
-  member = "serviceAccount:${google_service_account.deployer.email}"
+  ]
+}
+
+resource "google_storage_bucket_iam_member" "deployer_buckets_admin" {
+  for_each = toset(local.deployer_buckets_admin)
+  bucket   = each.value
+  role     = "roles/storage.admin"
+  member   = "serviceAccount:${google_service_account.deployer.email}"
 }
 
 # --- SA read-only de observabilidade (rotina Ops semanal — CMV-319) ---

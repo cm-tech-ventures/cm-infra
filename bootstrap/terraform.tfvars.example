@@ -93,3 +93,65 @@ secrets_leitores_externos = {
 # resolvendo tag->digest nas 445 imagens do cm-cores, nenhuma imagem viva cai —
 # nem o keepalive-check, que tem uma única, de 15/07. Apaga 297 versões.
 retencao_dry_run = false
+
+# --- SA de ensaio (cm-infra#74, etapa 9 do #70) ---
+# Temporária. Prova, antes da etapa 11, que os deploys passam sem os papéis que o
+# deployer vai perder. Roteiro em docs/permissoes.md, seção "SA de ensaio".
+# No fim da frente: ensaio_habilitado = false (o plan só destrói o ensaio).
+ensaio_habilitado = true
+
+# Só pessoas. Binding na SA de ensaio, nunca no projeto.
+ensaio_impersonadores = [
+  "user:cm.tech.ventures@gmail.com",
+  "user:carlos.silva150995@gmail.com",
+]
+
+# SAs onde o deployer tem serviceAccountUser por recurso, conferidas em 08/10/2026:
+#   for sa in $(gcloud iam service-accounts list --project=cm-ventures-core --format='value(email)'); do
+#     gcloud iam service-accounts get-iam-policy $sa --project=cm-ventures-core \
+#       --flatten=bindings[].members --filter='bindings.members~github-deployer-prod' \
+#       --format='value(bindings.role)' | sed "s|^|$sa |"
+#   done
+ensaio_act_as_service_accounts = [
+  "analytics-bq-pipeline",
+  "billing-hom-run",
+  "billing-run",
+  "cm-analytics-dbt-docs-proxy",
+  "cm-backoffice-frontend-hom-run",
+  "cm-backoffice-frontend-run",
+  "cm-backoffice-hom-run",
+  "cm-backoffice-run",
+  "cm-docs-proxy",
+  "cm-mcp-run",
+  "crm-run",
+  "identity-hom-run",
+  "identity-run",
+  "keepalive-check-hom-job",
+  "keepalive-check-job",
+  "service-run",
+]
+
+# Datasets onde o deployer é OWNER (bq show --format=prettyjson, campo access),
+# conferidos em 08/10/2026 (diamond_md_contato em 09/10, cm-analytics#116), MENOS bronze_logs e raw_mcp_logs: pela etapa 14 eles
+# passam a ter dono só humano, e o deploy não lê nem escreve neles.
+ensaio_datasets_dono = [
+  "bronze_bjj",
+  "bronze_core",
+  "bronze_custos",
+  "bronze_md",
+  "diamond_bjj",
+  "diamond_holding",
+  "diamond_md",
+  "diamond_md_contato",
+  "gold",
+  "silver_bjj",
+  "silver_core",
+  "silver_logs",
+  "silver_md",
+]
+
+# billing_export: o deployer é READER (environments/billing-export-acesso), porque o
+# apply do cm-analytics cria as views do bronze_custos sobre ele.
+ensaio_datasets_leitura = [
+  "billing_export",
+]

@@ -197,3 +197,96 @@ gcloud projects add-iam-policy-binding <projeto> \
 ```
 
 Depois, levar a volta ao código também.
+
+### SA de ensaio do core (cm-infra#74)
+
+`deployer-ensaio@cm-ventures-core.iam.gserviceaccount.com`, declarada em `bootstrap/ensaio.tf`.
+Tem o poder que o `github-deployer-prod` terá depois da etapa 11 ([#76](https://github.com/cm-tech-ventures/cm-infra/issues/76)):
+
+- os papéis de projeto do bootstrap, o papel custom de IAM de SA e `iam.serviceAccountCreator`;
+- `secretmanager.admin` só com as duas condições do deployer (`core-secrets-only` e `core-secrets-extra`, mesmo texto);
+- `storage.objectAdmin` no bucket de state e `storage.admin` só nos 3 buckets de site e staging;
+- `iam.serviceAccountUser` SA a SA, nas de runtime e de proxy onde o deployer tem hoje;
+- `bigquery.dataOwner` nos datasets do armazém e `dataViewer` no `billing_export`.
+  Nada no `bronze_logs` nem no `raw_mcp_logs` (etapa 14).
+
+Não tem: projectIamAdmin, roleAdmin, serviceAccountAdmin, serviceAccountUser no projeto,
+storage.admin no projeto, secretmanager.admin sem condição, iap.admin, loadBalancerAdmin. Nem WIF.
+As listas estão em `bootstrap/terraform.tfvars.example` (`ensaio_*`), com o comando que as conferiu.
+
+#### 1. Impersonar
+
+Só `cm.tech.ventures` e a conta pessoal do Carlos têm `serviceAccountTokenCreator` na SA.
+Depois do apply do bootstrap, o binding pode levar alguns minutos para valer.
+
+Para o Terraform, o jeito mais simples é um token da SA (vale 1 hora; o backend GCS também usa):
+
+```bash
+SA=deployer-ensaio@cm-ventures-core.iam.gserviceaccount.com
+export GOOGLE_OAUTH_ACCESS_TOKEN=$(gcloud auth print-access-token \
+  --account=cm.tech.ventures@gmail.com --impersonate-service-account=$SA)
+```
+
+Alternativa, com ADC (`gcloud auth application-default login`):
+`export GOOGLE_IMPERSONATE_SERVICE_ACCOUNT=$SA`.
+
+Para comandos `gcloud` avulsos: `gcloud config set auth/impersonate_service_account $SA`.
+Desfazer no fim com `gcloud config unset auth/impersonate_service_account`.
+
+Conferir quem está agindo antes de rodar qualquer coisa:
+
+```bash
+curl -s "https://oauth2.googleapis.com/tokeninfo?access_token=$GOOGLE_OAUTH_ACCESS_TOKEN" | jq -r .email
+```
+
+#### 2. Plan de cada state do core
+
+Em cada repo, no diretório do Terraform, com as mesmas variáveis que o workflow passa
+(ver o `deploy-cloud-run.yml` e o workflow do repo). Use a imagem que está no ar, para o plan
+não mostrar troca de imagem:
+`gcloud run services describe <serviço> --region=southamerica-east1 --format='value(spec.template.spec.containers[0].image)'`.
+
+```bash
+terraform init -input=false -reconfigure \
+  -backend-config=bucket=cm-ventures-core-tfstate -backend-config=prefix=<prefixo>
+terraform plan -input=false -lock=false <as -var do workflow>
+```
+
+| Core | Prefixo do state | O que rodar |
+|---|---|---|
+| analytics | `cm-analytics/prod` | plan |
+| backoffice | `cm-backoffice/prod`, `cm-backoffice-frontend/prod` | plan |
+| billing | `billing/prod` | plan |
+| crm | `crm/prod` | plan |
+| docs | `cm-docs/prod` | plan |
+| identity | `identity/prod` | plan |
+| mcp | `cm-mcp/prod` | plan |
+| service | `service/prod` | plan |
+| billing hom | `billing-hom/hom` | plan e **apply** |
+| identity hom | `identity-hom/hom` | plan e **apply** |
+| backoffice hom | `cm-backoffice-hom/hom`, `cm-backoffice-frontend-hom/hom` | plan e **apply** |
+
+Apply só nos de hom, e sempre pela conta do Carlos impersonando a SA, nunca pelo CI.
+De prod, nunca.
+
+#### 3. O que conta como passou
+
+- **Plan:** termina sem erro e mostra o **mesmo** resumo (`N to add, M to change, K to destroy`)
+  que o plan do mesmo state rodado pela `cm.tech.ventures` sem impersonar.
+  Um `403`/`Permission denied` é reprovação, mesmo que o resto do plan saia.
+- **Apply de hom:** termina com `Apply complete!` e o serviço de hom segue `Ready`
+  (`gcloud run services describe <serviço>-hom --region=southamerica-east1 --format='value(status.conditions[0].status)'`).
+- O resultado (comando, prefixo, resumo, erro se houver) vai colado no PR da etapa 9.
+
+Reprovou? O papel que faltou não sai do deployer na etapa 11, ou o que o usa é corrigido antes.
+Não se acrescenta papel à SA de ensaio para "fazer passar": ela tem que continuar igual ao deployer pós-E5.
+
+Cuidado ao ler o resultado: um plan sem mudança só prova leitura. Escrita (setIamPolicy, actAs,
+criar recurso) só aparece quando o plan tem algo a mudar, ou no apply de hom.
+
+#### 4. Desligar
+
+No `bootstrap/terraform.tfvars`: `ensaio_habilitado = false`. O plan tem que mostrar só
+destroys de recursos `*ensaio*` (a SA e os bindings dela), nenhum do deployer.
+Depois do apply, um PR apaga `bootstrap/ensaio.tf`, as variáveis `ensaio_*` e esta seção
+(plan: `No changes`).

@@ -76,3 +76,34 @@ variable "secrets_leitores_externos" {
   type        = map(list(string))
   default     = {}
 }
+
+# --- SA de ensaio (ensaio.tf, cm-infra#74) ---
+# As listas não têm default de propósito: um terraform.tfvars antigo, sem elas,
+# faz o plan falhar em vez de criar uma SA de ensaio sem actAs nem datasets (que
+# reprovaria o ensaio por motivo falso). Valores em terraform.tfvars.example.
+
+variable "ensaio_habilitado" {
+  description = "Cria a SA temporária deployer-ensaio e os papéis dela. false no fim da frente: o plan só destrói o que está em ensaio.tf."
+  type        = bool
+  default     = true
+}
+
+variable "ensaio_impersonadores" {
+  description = "Members IAM com roles/iam.serviceAccountTokenCreator na SA deployer-ensaio (binding na SA). Só pessoas, nunca SA nem WIF."
+  type        = list(string)
+}
+
+variable "ensaio_act_as_service_accounts" {
+  description = "account_id das SAs do projeto onde o deployer tem roles/iam.serviceAccountUser por recurso. A SA de ensaio recebe o mesmo, SA a SA."
+  type        = list(string)
+}
+
+variable "ensaio_datasets_dono" {
+  description = "Datasets BigQuery onde o deployer é OWNER e segue sendo depois das etapas 11 e 14. A SA de ensaio recebe roles/bigquery.dataOwner."
+  type        = list(string)
+}
+
+variable "ensaio_datasets_leitura" {
+  description = "Datasets BigQuery onde o deploy só lê. A SA de ensaio recebe roles/bigquery.dataViewer."
+  type        = list(string)
+}

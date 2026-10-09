@@ -32,3 +32,8 @@ output "mcp_logs_sink_writer_identity" {
   description = "Writer identity do sink do Cloud Logging — referência para debug de permissão (CMV-594)."
   value       = google_logging_project_sink.mcp_tool_calls.writer_identity
 }
+
+output "ensaio_service_account" {
+  description = "Email da SA de ensaio (cm-infra#74), para impersonar no roteiro de docs/permissoes.md. Nulo com ensaio_habilitado = false."
+  value       = var.ensaio_habilitado ? google_service_account.deployer_ensaio[0].email : null
+}
