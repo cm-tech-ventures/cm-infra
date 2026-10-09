@@ -132,7 +132,7 @@ ensaio_act_as_service_accounts = [
 ]
 
 # Datasets onde o deployer é OWNER (bq show --format=prettyjson, campo access),
-# conferidos em 08/10/2026, MENOS bronze_logs e raw_mcp_logs: pela etapa 14 eles
+# conferidos em 08/10/2026 (diamond_md_contato em 09/10, cm-analytics#116), MENOS bronze_logs e raw_mcp_logs: pela etapa 14 eles
 # passam a ter dono só humano, e o deploy não lê nem escreve neles.
 ensaio_datasets_dono = [
   "bronze_bjj",
@@ -142,6 +142,7 @@ ensaio_datasets_dono = [
   "diamond_bjj",
   "diamond_holding",
   "diamond_md",
+  "diamond_md_contato",
   "gold",
   "silver_bjj",
   "silver_core",
