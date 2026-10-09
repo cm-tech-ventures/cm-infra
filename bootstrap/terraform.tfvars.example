@@ -51,12 +51,11 @@ metabase_impersonators = ["user:cm.tech.ventures@gmail.com"]
 # Billing account do core, para conceder roles/billing.viewer à cm-ops-observer.
 billing_account_id = "013EE2-6E67DB-A423CD"
 
-# Writer identity do sink de logs do md-hom (projeto 407283246579) que escreve
-# no dataset raw_mcp_logs deste projeto. Provisionado no repo do md-mcp; o
-# valor entra aqui à mão porque não há trust cross-project entre os dois state.
-mcp_logs_external_sink_writer_identities = [
-  "serviceAccount:service-407283246579@gcp-sa-logging.iam.gserviceaccount.com",
-]
+# Writer identities de sinks cross-project que escrevem no dataset raw_mcp_logs.
+# Vazio desde a E9 (cm-infra#87): o md-mcp (md-hom) migrou para o envelope novo
+# (mcp.tool_call -> bronze_logs, md-backend#367/#369) e o sink antigo foi removido.
+# O sink do core cm-mcp-tool-calls-to-bq e o dataset ficam ate o cm-mcp migrar.
+mcp_logs_external_sink_writer_identities = []
 
 # Leitura cruzada de secrets do core por SAs do MD e do bjj (cm-infra#73).
 # Concedidas a mao; importadas em imports.tf. Ficaram DE FORA, de proposito,
