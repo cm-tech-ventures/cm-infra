@@ -110,6 +110,11 @@ resource "google_service_account_iam_member" "wif_binding" {
 # dado de dataset nenhum. Quem cria o dataset vira OWNER dele, e isso basta para o
 # deploy dar as permissões por dataset (google_bigquery_dataset_iam_member) — sem
 # abrir billing_export nem raw_mcp_logs.
+# datacatalog.categoryAdmin + bigquerydatapolicy.admin: o cm-analytics passou a criar
+# a taxonomia/policy tag e a data policy do armazém no Terraform (M1, cm-analytics#122).
+# Sem elas o apply falha com 403 em google_data_catalog_taxonomy. São os papéis mínimos
+# para criar taxonomia, policy tag e data policy; bigquerydatapolicy.admin também serve
+# para conceder maskedReader nas data policies depois.
 resource "google_project_iam_member" "deployer_roles" {
   for_each = toset([
     "roles/run.admin",
@@ -119,6 +124,8 @@ resource "google_project_iam_member" "deployer_roles" {
     "roles/logging.configWriter",
     "roles/monitoring.alertPolicyEditor",
     "roles/monitoring.notificationChannelEditor",
+    "roles/datacatalog.categoryAdmin",
+    "roles/bigquerydatapolicy.admin",
   ])
   project = var.project_id
   role    = each.value
