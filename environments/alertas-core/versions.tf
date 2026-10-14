@@ -5,10 +5,6 @@ terraform {
       source  = "hashicorp/google"
       version = ">= 5.30, < 7"
     }
-    time = {
-      source  = "hashicorp/time"
-      version = ">= 0.9"
-    }
   }
 
   backend "gcs" {
