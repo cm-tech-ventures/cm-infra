@@ -31,6 +31,8 @@ environments/          # instâncias com state próprio
   alertas-bjj/         # idem, projeto bjj-system (outra conta GCP, outro state)
   log-sinks/           # sinks de eventos dos 3 projetos para o bronze_logs
   billing-export-acesso/  # leitura no billing_export (export de faturamento, fora de TF)
+  billing-export-acesso-md/   # idem, md-hom (state no bucket da conta do MD)
+  billing-export-acesso-bjj/  # idem, bjj-system (state no bucket da conta do bjj)
 docs/                  # padrões da casa — ler antes de criar recurso novo
 .github/workflows/     # reusable workflows (workflow_call)
   django-ci.yml        # ruff + pytest + contrato OpenAPI (spectacular diff)
