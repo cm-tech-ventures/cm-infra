@@ -29,6 +29,7 @@ environments/          # instâncias com state próprio
   keepalive/           # keep-alive dos bancos Supabase free-tier
   alertas-core/        # alertas de rotina do cm-ventures-core (catálogo em YAML)
   alertas-bjj/         # idem, projeto bjj-system (outra conta GCP, outro state)
+  iam-bjj/             # IAM do bjj-system: contas de deploy, WIF, state (ver docs/permissoes.md)
   log-sinks/           # sinks de eventos dos 3 projetos para o bronze_logs
   billing-export-acesso/  # leitura no billing_export (export de faturamento, fora de TF)
   billing-export-acesso-md/   # idem, md-hom (state no bucket da conta do MD)
